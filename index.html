@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Liminal Space Shooter</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts for retro/modern unsettling look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Outfit:wght@300;400;600;800&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div id="game-container">
+        <!-- CRT/VHS Scanline Overlay for retro vibe -->
+        <div class="crt-overlay"></div>
+        <div class="vignette-overlay"></div>
+
+        <!-- ================= HOME SCREEN ================= -->
+        <div id="home-screen" class="screen active">
+            <div class="menu-decor top-decor">SYSTEM STATUS: UNSTABLE</div>
+            <div class="menu-decor bottom-decor">LEVEL 0 - THE LOBBY</div>
+
+            <div class="logo-container">
+                <h1 class="game-title">LIMINAL SPACE SHOOTER</h1>
+                <div class="game-subtitle">A RAYCASTING SURVIVAL SIMULATOR</div>
+            </div>
+
+            <div class="user-badge">
+                <span class="user-label">IDENTIFIER:</span>
+                <span id="home-username" class="user-value">Explorer_0000</span>
+                <span id="home-coins-badge" class="coins-badge">🪙 0</span>
+            </div>
+
+            <div class="menu-buttons">
+                <button id="btn-play" class="btn btn-primary btn-glitch">ENTER CODESPACE (PLAY)</button>
+                <button id="btn-daily" class="btn btn-secondary">DAILY RECOVERIES <span id="daily-ready-dot"
+                        class="dot ready-dot hidden"></span></button>
+                <button id="btn-leaderboard" class="btn btn-secondary">ARCHIVE RECORDS</button>
+                <button id="btn-settings" class="btn btn-secondary">CONFIG OPTIONS</button>
+            </div>
+
+            <div class="disclaimer">
+                WARNING: EXPOSURE TO HIGH FREQUENCY FLUORESCENT HUM AND ENDLESS ARCHITECTURE MAY CAUSE COGNITIVE
+                DISSONANCE.
+            </div>
+        </div>
+
+        <!-- ================= DAILY CHECK-IN MODAL ================= -->
+        <div id="daily-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>DAILY RECOVERIES</h2>
+                    <button id="btn-close-daily" class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="streak-info">
+                        <div class="streak-title">STREAK MULTIPLIER</div>
+                        <div id="streak-count" class="streak-count">0 Days</div>
+                    </div>
+
+                    <div class="daily-grid">
+                        <div class="day-box" data-day="1">
+                            <span class="day-label">DAY 1</span>
+                            <span class="day-reward">🪙 100</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="2">
+                            <span class="day-label">DAY 2</span>
+                            <span class="day-reward">🪙 150</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="3">
+                            <span class="day-label">DAY 3</span>
+                            <span class="day-reward">🪙 200</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="4">
+                            <span class="day-label">DAY 4</span>
+                            <span class="day-reward">🪙 250</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="5">
+                            <span class="day-label">DAY 5</span>
+                            <span class="day-reward">🪙 300</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="6">
+                            <span class="day-label">DAY 6</span>
+                            <span class="day-reward">🪙 350</span>
+                            <span class="day-status"></span>
+                        </div>
+                        <div class="day-box" data-day="7">
+                            <span class="day-label">DAY 7</span>
+                            <span class="day-reward">🪙 500</span>
+                            <span class="day-status"></span>
+                        </div>
+                    </div>
+
+                    <button id="btn-claim-daily" class="btn btn-primary disabled">CLAIM SURVIVAL COINS</button>
+                    <div id="daily-timer" class="countdown-timer hidden">Next claim available in: <span
+                            id="countdown-val">00:00:00</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= LEADERBOARD MODAL ================= -->
+        <div id="leaderboard-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>ARCHIVE RECORDS</h2>
+                    <button id="btn-close-leaderboard" class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-container">
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>RANK</th>
+                                    <th>EXPLORER</th>
+                                    <th>SCORE</th>
+                                    <th>KILLS</th>
+                                    <th>DATE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-body">
+                                <!-- Dynamic entries go here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= SETTINGS MODAL ================= -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>CONFIG OPTIONS</h2>
+                    <button id="btn-close-settings" class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-item">
+                        <label for="settings-username">EXPLORER IDENTIFIER</label>
+                        <input type="text" id="settings-username" maxlength="15" placeholder="Enter Username...">
+                    </div>
+
+                    <div class="setting-item checkbox-item">
+                        <label for="settings-sfx">SOUND EFFECTS</label>
+                        <input type="checkbox" id="settings-sfx" checked>
+                    </div>
+
+                    <div class="setting-item checkbox-item">
+                        <label for="settings-hum">FLUORESCENT LIGHT HUM</label>
+                        <input type="checkbox" id="settings-hum" checked>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="settings-sensitivity">LOOK SENSITIVITY</label>
+                        <div class="range-container">
+                            <input type="range" id="settings-sensitivity" min="1" max="10" value="5">
+                            <span id="sensitivity-val">5</span>
+                        </div>
+                    </div>
+
+                    <button id="btn-save-settings" class="btn btn-primary">SAVE CONFIGURATION</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= GAMEPLAY SCREEN ================= -->
+        <div id="game-screen" class="screen hidden">
+            <!-- Raycasting Engine Canvas -->
+            <canvas id="game-canvas"></canvas>
+            <div id="pc-mouse-lock-hint" class="pc-hint hidden">CLICK CANVAS TO LOCK MOUSE</div>
+
+            <!-- Gameplay HUD Overlay -->
+            <div class="hud-container">
+                <!-- Top Left: HP Bar & Value -->
+                <div class="hud-item hud-hp">
+                    <div class="hud-hp-header">
+                        <span class="hud-label">VITALS</span>
+                        <span id="hud-hp-text" class="hud-value">100 HP</span>
+                    </div>
+                    <div class="hud-bar-bg">
+                        <div id="hud-hp-bar" class="hud-bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Top Center: Current Score & Enemy Counter -->
+                <div class="hud-item hud-score">
+                    <span class="hud-label">SCORE</span>
+                    <span id="hud-score-text" class="hud-value">000000</span>
+                    <div id="hud-kills-tracker" class="hud-sub-label">KILLS: 0</div>
+                    <div id="hud-debug-coords"
+                        style="font-family: var(--font-mono); font-size: 0.75rem; color: #ff3333; margin-top: 4px;">POS:
+                        X=11.50, Y=14.50</div>
+                </div>
+
+                <!-- Top Right: Pause Trigger -->
+                <div class="hud-item hud-pause">
+                    <button id="btn-pause-game" class="btn-pause">&#9612;&#9612;</button>
+                </div>
+            </div>
+
+            <!-- Center screen crosshair -->
+            <div class="hud-crosshair"></div>
+
+            <!-- Mobile Controls Layer -->
+            <div class="mobile-controls-layer">
+                <!-- Left half: Virtual Joystick Zone -->
+                <div id="joystick-zone" class="control-zone">
+                    <div id="joystick-container">
+                        <div id="joystick-base">
+                            <div id="joystick-handle"></div>
+                        </div>
+                    </div>
+                    <div class="control-hint">MOVE / STRAFE</div>
+                </div>
+
+                <!-- Right half: Fire Zone (Entire right half allows looking by swiping, except the fire button itself) -->
+                <div id="action-zone" class="control-zone">
+                    <button id="btn-fire-weapon">FIRE</button>
+                    <div class="control-hint">DRAG TO LOOK / TAP TO FIRE</div>
+                </div>
+            </div>
+
+            <!-- Red flash on damage screen -->
+            <div id="damage-flash" class="damage-flash-overlay"></div>
+        </div>
+
+        <!-- ================= PAUSE OVERLAY ================= -->
+        <div id="pause-overlay" class="overlay-screen hidden">
+            <div class="overlay-content">
+                <h2 class="overlay-title">SYSTEM SUSPENDED</h2>
+                <div class="menu-buttons">
+                    <button id="btn-resume-game" class="btn btn-primary">RESUME SIMULATION</button>
+                    <button id="btn-pause-settings" class="btn btn-secondary">CONFIG OPTIONS</button>
+                    <button id="btn-exit-menu" class="btn btn-secondary danger">ABORT RUN (EXIT)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= GAME OVER SCREEN ================= -->
+        <div id="game-over-screen" class="screen hidden">
+            <div class="game-over-content">
+                <h1 class="game-over-title glitch" data-text="LOST IN THE CODESPACE">LOST IN CODESPACE</h1>
+                <p class="game-over-desc">YOUR PERSISTENCE FAINTED IN THE YELLOW CORRIDORS</p>
+
+                <div class="game-over-stats">
+                    <div class="stat-row">
+                        <span class="stat-label">FINAL SCORE:</span>
+                        <span id="go-score" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">TOTAL ELIMINATIONS:</span>
+                        <span id="go-kills" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">PERSONAL BEST RECORD:</span>
+                        <span id="go-best" class="stat-value">0</span>
+                    </div>
+                </div>
+
+                <div class="menu-buttons">
+                    <button id="btn-restart" class="btn btn-primary">RESTART RUN</button>
+                    <button id="btn-return-menu" class="btn btn-secondary">RETURN TO LOBBY</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Script -->
+    <script src="game.js?v=2.1.0"></script>
+    <div id="react-root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
