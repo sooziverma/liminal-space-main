@@ -105,11 +105,81 @@ const CONTRACT_ABI = [
   }
 ];
 
+const ERC20_ABI = [
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "spender",
+        "type": "address"
+      }
+    ],
+    "name": "allowance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "spender",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "name": "approve",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "balanceOf",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
 // Deployed smart contract address on Arc Testnet
-const CONTRACT_ADDRESS = "0xeF0867eC5EA5C66A4c5eD06AE5dae5984CE8e882";
-const REQUIRED_CHAIN_ID = 504202; // Arc Testnet
-const ALTERNATIVE_CHAIN_ID = 5042002; // RPC returns this
-const isArcTestnet = (id) => id === REQUIRED_CHAIN_ID || id === ALTERNATIVE_CHAIN_ID;
+const CONTRACT_ADDRESS = "0xAf1D3545a179769EdCD5dcCa933501dF7146f8e7";
+const USDC_TOKEN_ADDRESS = "0x3600000000000000000000000000000000000000";
+const REQUIRED_CHAIN_ID = 5042002; // Arc Testnet
+const isArcTestnet = (id) => id === REQUIRED_CHAIN_ID;
 
 let originalStartGame = null;
 
@@ -237,20 +307,12 @@ export default function App() {
       return true;
     }
     try {
-      console.log("Not on Arc Testnet. Prompting chain switch to:", ALTERNATIVE_CHAIN_ID);
-      await switchChainAsync({ chainId: ALTERNATIVE_CHAIN_ID });
+      console.log("Not on Arc Testnet. Prompting chain switch to:", REQUIRED_CHAIN_ID);
+      await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
       const newChain = await getActiveChainId();
       return isArcTestnet(newChain);
     } catch (err) {
-      console.error("Failed to switch chain to alternative:", err);
-      try {
-        console.log("Trying fallback chain switch to:", REQUIRED_CHAIN_ID);
-        await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
-        const newChain = await getActiveChainId();
-        return isArcTestnet(newChain);
-      } catch (fallbackErr) {
-        console.error("Failed to switch chain to required:", fallbackErr);
-      }
+      console.error("Failed to switch chain to Arc Testnet:", err);
       return false;
     }
   };
@@ -275,7 +337,7 @@ export default function App() {
 
       setPaymentType('session');
       setShowOverlay(true);
-      setOverlayStatus('Requesting 0.1 native Arc testnet token payment for play session...');
+      setOverlayStatus('Requesting 0.1 USDC payment for play session...');
     };
 
     // 2. Score submission interceptor
@@ -293,7 +355,7 @@ export default function App() {
       setScoreToSubmit(score);
       setPaymentType('score');
       setShowOverlay(true);
-      setOverlayStatus(`Requesting 0.1 native Arc testnet token payment to submit score of ${score}...`);
+      setOverlayStatus(`Requesting 0.1 USDC payment to submit score of ${score}...`);
     };
 
     // 3. Daily Claim interceptor
@@ -318,7 +380,7 @@ export default function App() {
 
       setPaymentType('daily');
       setShowOverlay(true);
-      setOverlayStatus('Requesting 0.1 native Arc testnet token payment for Daily Check-In...');
+      setOverlayStatus('Requesting 0.1 USDC payment for Daily Check-In...');
     };
 
     // 4. Update Daily UI from blockchain
@@ -361,7 +423,7 @@ export default function App() {
       } else if (canClaim) {
         claimBtn.classList.remove('disabled');
         claimBtn.disabled = false;
-        claimBtn.innerText = "CLAIM CHECK-IN (0.1 native Arc testnet token)";
+        claimBtn.innerText = "CLAIM CHECK-IN (0.1 USDC)";
         timerDiv.classList.add('hidden');
       } else {
         claimBtn.classList.add('disabled');
@@ -460,18 +522,29 @@ export default function App() {
     };
   }, [isConnected, address, web3Stats]);
 
+  // Helper to wait for transaction receipt with a 60-second timeout
+  const waitForReceiptWithTimeout = async (txHash, label) => {
+    console.log(`Waiting for receipt for ${label} (hash: ${txHash})...`);
+    const receiptPromise = publicClient.waitForTransactionReceipt({ hash: txHash });
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} transaction confirmation timed out after 60 seconds.`)), 60000);
+    });
+    
+    return Promise.race([receiptPromise, timeoutPromise]);
+  };
+
   // Run the transaction
   const executePayment = async () => {
     // 1. Log wallet connection details
     console.log("=== transaction request ===");
-    console.log("wallet connection status:", isConnected ? "connected" : "disconnected");
     console.log("connected wallet address:", address);
     
     const currentChainId = await getActiveChainId();
-    console.log("current chainId:", currentChainId);
+    console.log("detected chainId:", currentChainId);
     console.log("required chainId:", REQUIRED_CHAIN_ID);
-    console.log("alternative chainId:", ALTERNATIVE_CHAIN_ID);
     console.log("contract address:", CONTRACT_ADDRESS);
+    console.log("USDC token address:", USDC_TOKEN_ADDRESS);
 
     // Verify network directly before transaction starts
     const onCorrectNetwork = await ensureCorrectNetwork();
@@ -484,11 +557,61 @@ export default function App() {
     setLocalSending(true);
     setLocalConfirming(false);
     setLocalError(null);
-    setOverlayStatus("Confirming in wallet...");
+    setOverlayStatus("Checking USDC balance...");
 
     try {
+      const paymentValueUSDC = 100000n; // 0.1 USDC (6 decimals)
+
+      // 2. Verify user balance
+      console.log("Fetching user USDC balance...");
+      const balance = await publicClient.readContract({
+        address: USDC_TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [address]
+      });
+      console.log("User USDC balance:", balance.toString());
+
+      if (balance < paymentValueUSDC) {
+        throw new Error("Insufficient USDC balance. You need at least 0.1 USDC to play.");
+      }
+
+      // 3. Verify USDC allowance
+      console.log("Fetching user USDC allowance...");
+      const allowance = await publicClient.readContract({
+        address: USDC_TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [address, CONTRACT_ADDRESS]
+      });
+      console.log("User USDC allowance:", allowance.toString());
+
+      // 4. Request approval if needed
+      if (allowance < paymentValueUSDC) {
+        setOverlayStatus("Requesting USDC spend approval in wallet...");
+        console.log("Requesting approval for exactly 0.1 USDC (100,000 units)...");
+        
+        const approveHash = await writeContractAsync({
+          address: USDC_TOKEN_ADDRESS,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [CONTRACT_ADDRESS, paymentValueUSDC],
+        });
+        
+        console.log("Approval transaction hash returned:", approveHash);
+        setOverlayStatus("Confirming spend approval on blockchain...");
+        
+        const approveReceipt = await waitForReceiptWithTimeout(approveHash, "USDC Spend Approval");
+        console.log("Approval transaction receipt status:", approveReceipt.status);
+        
+        if (approveReceipt.status !== 'success') {
+          throw new Error("USDC Spend Approval transaction was reverted on blockchain.");
+        }
+      }
+
+      // 5. Execute payment transaction
+      setOverlayStatus("Confirming payment in wallet...");
       let hash;
-      const paymentValue = parseEther('0.1');
 
       if (paymentType === 'session') {
         console.log("Calling payForSession on contract...");
@@ -496,7 +619,6 @@ export default function App() {
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'payForSession',
-          value: paymentValue,
         });
       } else if (paymentType === 'score') {
         console.log(`Calling submitScore on contract with score: ${scoreToSubmit}...`);
@@ -505,7 +627,6 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'submitScore',
           args: [BigInt(scoreToSubmit)],
-          value: paymentValue,
         });
       } else if (paymentType === 'daily') {
         console.log("Calling dailyCheckIn on contract...");
@@ -513,27 +634,25 @@ export default function App() {
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'dailyCheckIn',
-          value: paymentValue,
         });
       }
 
-      console.log("tx hash returned:", hash);
+      console.log("Payment transaction hash returned:", hash);
 
       if (!hash) {
         throw new Error("No transaction hash was returned by the wallet.");
       }
 
-      // Real transaction hash returned
+      // 6. Wait for payment confirmation
       setLocalSending(false);
       setLocalConfirming(true);
-      setOverlayStatus("Confirming on blockchain...");
+      setOverlayStatus("Confirming payment on blockchain...");
 
-      console.log("Waiting for transaction receipt (publicClient.waitForTransactionReceipt) for hash:", hash);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Found transaction receipt:", receipt);
+      const receipt = await waitForReceiptWithTimeout(hash, "USDC Payment");
+      console.log("Payment transaction receipt status:", receipt.status);
 
       if (receipt.status !== 'success') {
-        throw new Error("Transaction reverted on chain.");
+        throw new Error("Payment transaction was reverted on blockchain.");
       }
 
       // Success
@@ -558,7 +677,7 @@ export default function App() {
       setPaymentType(null);
 
     } catch (err) {
-      console.error("contract error if any:", err);
+      console.error("Payment execution failure details:", err);
 
       setLocalSending(false);
       setLocalConfirming(false);
@@ -575,7 +694,7 @@ export default function App() {
       if (isRejected) {
         alert("Transaction rejected.");
       } else {
-        alert("Transaction failed: " + (err.shortMessage || err.message));
+        alert("Transaction failed: " + (err.shortMessage || err.message || err.message));
       }
     }
   };
@@ -613,14 +732,14 @@ export default function App() {
         <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
       </div>
 
-      {/* Native Arc Testnet Token Transaction Confirmation Overlay */}
+      {/* USDC Transaction Confirmation Overlay */}
       {showOverlay && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
-            <h2 style={modalHeaderStyle}>NATIVE ARC TESTNET TOKEN PAYMENT REQUIRED</h2>
+            <h2 style={modalHeaderStyle}>USDC PAYMENT REQUIRED</h2>
             <div style={dividerStyle}></div>
             <p style={modalTextStyle}>
-              This action requires a payment of exactly <b>0.1 native Arc testnet token</b> on Arc Testnet.
+              This action requires a payment of exactly <b>0.1 USDC</b> on Arc Testnet.
             </p>
             <p style={{ ...modalTextStyle, color: '#ffcc00' }}>
               {overlayStatus}

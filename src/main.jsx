@@ -8,8 +8,8 @@ import App from './App.jsx';
 
 // Define the Arc Testnet chain specifications
 const arcTestnet = {
-  id: 504202,
-  name: 'Arc Testnet (Legacy)',
+  id: 5042002,
+  name: 'Arc Testnet',
   nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://rpc.testnet.arc.network'] },
@@ -20,17 +20,11 @@ const arcTestnet = {
   testnet: true,
 };
 
-const arcTestnetRpc = {
-  ...arcTestnet,
-  id: 5042002,
-  name: 'Arc Testnet',
-};
-
 // Configure RainbowKit and wagmi
 const config = getDefaultConfig({
   appName: 'Liminal Space Shooter',
   projectId: '0e48dd8f84c7f5ec334d2ed90e4d1995', // WalletConnect dummy project ID
-  chains: [arcTestnet, arcTestnetRpc],
+  chains: [arcTestnet],
   ssr: false,
 });
 
