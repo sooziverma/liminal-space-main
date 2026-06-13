@@ -237,11 +237,20 @@ export default function App() {
       return true;
     }
     try {
-      await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
+      console.log("Not on Arc Testnet. Prompting chain switch to:", ALTERNATIVE_CHAIN_ID);
+      await switchChainAsync({ chainId: ALTERNATIVE_CHAIN_ID });
       const newChain = await getActiveChainId();
       return isArcTestnet(newChain);
     } catch (err) {
-      console.error("Failed to switch chain:", err);
+      console.error("Failed to switch chain to alternative:", err);
+      try {
+        console.log("Trying fallback chain switch to:", REQUIRED_CHAIN_ID);
+        await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
+        const newChain = await getActiveChainId();
+        return isArcTestnet(newChain);
+      } catch (fallbackErr) {
+        console.error("Failed to switch chain to required:", fallbackErr);
+      }
       return false;
     }
   };
@@ -453,12 +462,16 @@ export default function App() {
 
   // Run the transaction
   const executePayment = async () => {
-    // Log current info for debugging
+    // 1. Log wallet connection details
+    console.log("=== transaction request ===");
+    console.log("wallet connection status:", isConnected ? "connected" : "disconnected");
+    console.log("connected wallet address:", address);
+    
     const currentChainId = await getActiveChainId();
-    console.log("=== Transaction Execution Started ===");
     console.log("current chainId:", currentChainId);
     console.log("required chainId:", REQUIRED_CHAIN_ID);
-    console.log("connected wallet address:", address);
+    console.log("alternative chainId:", ALTERNATIVE_CHAIN_ID);
+    console.log("contract address:", CONTRACT_ADDRESS);
 
     // Verify network directly before transaction starts
     const onCorrectNetwork = await ensureCorrectNetwork();
@@ -507,7 +520,7 @@ export default function App() {
       console.log("tx hash returned:", hash);
 
       if (!hash) {
-        throw new Error("No transaction hash returned.");
+        throw new Error("No transaction hash was returned by the wallet.");
       }
 
       // Real transaction hash returned
@@ -522,6 +535,7 @@ export default function App() {
 
       while (!receipt && (Date.now() - startTime < timeoutMs)) {
         try {
+          console.log(`polling receipt for ${hash}...`);
           const res = await fetch("https://rpc.testnet.arc.network", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -545,11 +559,52 @@ export default function App() {
       }
 
       const status = receipt ? receipt.status : null;
+      console.log("receipt result:", receipt);
       console.log("receipt status:", status);
 
       // On EVM, receipt.status is "0x1" (success) or "0x0" (failure), or 1 / 0
-      if (!receipt || (status !== "0x1" && status !== 1 && status !== "1")) {
-        throw new Error(receipt ? "Transaction failed on blockchain." : "Transaction confirmation timed out.");
+      if (!receipt) {
+        throw new Error("Transaction confirmation timed out (60s).");
+      }
+
+      if (status !== "0x1" && status !== 1 && status !== "1") {
+        // Try to fetch revert reason
+        let revertReason = "Transaction reverted on chain.";
+        try {
+          console.log("Attempting to fetch transaction revert reason...");
+          const txRes = await fetch("https://rpc.testnet.arc.network", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 4,
+              method: "eth_getTransactionByHash",
+              params: [hash]
+            })
+          });
+          const txData = await txRes.json();
+          if (txData.result) {
+            console.log("Transaction details:", txData.result);
+            const callRes = await fetch("https://rpc.testnet.arc.network", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: 5,
+                method: "eth_call",
+                params: [txData.result, "latest"]
+              })
+            });
+            const callData = await callRes.json();
+            if (callData.error) {
+              revertReason = callData.error.message;
+            }
+          }
+        } catch (revertErr) {
+          console.error("Error fetching revert reason:", revertErr);
+        }
+        console.error("contract revert reason:", revertReason);
+        throw new Error(revertReason);
       }
 
       // Success
@@ -591,7 +646,7 @@ export default function App() {
       if (isRejected) {
         alert("Transaction rejected.");
       } else {
-        alert("Transaction failed.");
+        alert("Transaction failed: " + (err.shortMessage || err.message));
       }
     }
   };
