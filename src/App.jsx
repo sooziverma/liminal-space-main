@@ -522,14 +522,16 @@ export default function App() {
     };
   }, [isConnected, address, web3Stats]);
 
-  // Helper to wait for transaction receipt with a 60-second timeout
+  // Helper to wait for transaction receipt with a 180-second timeout
   const waitForReceiptWithTimeout = async (txHash, label) => {
     console.log(`[Receipt Detection] Starting receipt polling for ${label} (hash: ${txHash})...`);
     console.log(`[Receipt Detection] Using contract address: ${CONTRACT_ADDRESS}, USDC address: ${USDC_TOKEN_ADDRESS}`);
     console.log(`[Receipt Detection] PublicClient active chain ID: ${publicClient?.chain?.id}, expected chain ID: ${REQUIRED_CHAIN_ID}, RPC URL: https://rpc.testnet.arc.network`);
     
+    setOverlayStatus("Waiting for Arc confirmation...");
+
     const startTime = Date.now();
-    const timeoutMs = 60000; // 60 seconds timeout
+    const timeoutMs = 180000; // 180 seconds timeout
     let attempt = 0;
 
     while (Date.now() - startTime < timeoutMs) {
@@ -546,14 +548,23 @@ export default function App() {
           return receipt;
         }
       } catch (pollErr) {
-        console.warn(`[Receipt Detection] Attempt #${attempt} failed with error:`, pollErr);
+        const errStr = (pollErr.name || pollErr.message || "").toLowerCase();
+        const isNotFoundError = errStr.includes("transactionreceiptnotfounderror") || 
+                            errStr.includes("not found") || 
+                            pollErr.code === -32603; // generic error code for some JSON-RPC errors
+        
+        if (isNotFoundError) {
+          console.log(`[Receipt Detection] Attempt #${attempt}: Transaction receipt not found yet (still pending/indexing).`);
+        } else {
+          console.warn(`[Receipt Detection] Attempt #${attempt} failed with unexpected error:`, pollErr);
+        }
       }
       
-      // Wait for 1.5 seconds before polling again
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Wait for 3.0 seconds before polling again
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    throw new Error(`${label} transaction receipt confirmation timed out after 60 seconds.`);
+    throw new Error(`Transaction confirmation timed out after 180 seconds. Hash: ${txHash}. Please check ArcScan (https://testnet.arcscan.app) to verify if it succeeded.`);
   };
 
   // Run the transaction
