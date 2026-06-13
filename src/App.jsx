@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  useAccount, 
-  useChainId, 
-  useSwitchChain, 
-  useWriteContract, 
-  useWaitForTransactionReceipt, 
-  useReadContract 
+import {
+  useAccount,
+  useChainId,
+  useSwitchChain,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useReadContract
 } from 'wagmi';
 import { parseEther } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -106,7 +106,7 @@ const CONTRACT_ABI = [
 ];
 
 // Deployed smart contract address on Arc Testnet
-const CONTRACT_ADDRESS = "0xeF0867eC5EA5C66A4c5eD06AE5dae5984CE8e882"; 
+const CONTRACT_ADDRESS = "0xeF0867eC5EA5C66A4c5eD06AE5dae5984CE8e882";
 const REQUIRED_CHAIN_ID = 5042002; // Arc Testnet
 
 export default function App() {
@@ -116,7 +116,7 @@ export default function App() {
 
   // Contract Write hook
   const { data: txHash, writeContract, isPending: isTxSending, error: txError, reset: resetTx } = useWriteContract();
-  
+
   // Wait for transaction confirmation
   const { isLoading: isTxConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -170,7 +170,7 @@ export default function App() {
         const bonusPoints = parseInt(hex.substring(64, 128), 16);
         const lastDailyCheckIn = parseInt(hex.substring(128, 192), 16);
         const pendingSessions = parseInt(hex.substring(192, 256), 16);
-        
+
         setWeb3Stats({ highScore, bonusPoints, lastDailyCheckIn, pendingSessions });
       }
     } catch (e) {
@@ -185,7 +185,7 @@ export default function App() {
   // Sync React state to HTML UI
   useEffect(() => {
     if (!window.DOM) return;
-    
+
     // Update Identifier and coins badge
     if (isConnected && address) {
       window.DOM.usernameLabel.innerText = shortenAddress(address);
@@ -211,7 +211,7 @@ export default function App() {
   useEffect(() => {
     // 1. Play Session interceptor
     const originalStartGame = window.startGame;
-    window.startGame = async function() {
+    window.startGame = async function () {
       if (!isConnected) {
         alert("Wallet connection is required to start a game session.");
         return;
@@ -227,12 +227,12 @@ export default function App() {
     };
 
     // 2. Score submission interceptor
-    window.submitScoreToLeaderboard = function(score, kills) {
+    window.submitScoreToLeaderboard = function (score, kills) {
       if (!isConnected || chainId !== REQUIRED_CHAIN_ID) {
         console.warn("Wallet not connected to Arc Testnet, skipping onchain leaderboard submission.");
         return;
       }
-      
+
       setScoreToSubmit(score);
       setPaymentType('score');
       setShowOverlay(true);
@@ -240,7 +240,7 @@ export default function App() {
     };
 
     // 3. Daily Claim interceptor
-    window.claimDailyReward = function() {
+    window.claimDailyReward = function () {
       if (!isConnected || chainId !== REQUIRED_CHAIN_ID) {
         alert("Please connect to Arc Testnet to claim daily rewards.");
         return;
@@ -260,7 +260,7 @@ export default function App() {
     };
 
     // 4. Update Daily UI from blockchain
-    window.updateDailyCheckInUI = function() {
+    window.updateDailyCheckInUI = function () {
       const now = Math.floor(Date.now() / 1000);
       const cooldownEnd = web3Stats.lastDailyCheckIn + 24 * 3600;
       const canClaim = web3Stats.lastDailyCheckIn === 0 || now >= cooldownEnd;
@@ -306,7 +306,7 @@ export default function App() {
         claimBtn.disabled = true;
         claimBtn.innerText = "ALREADY CLAIMED TODAY";
         timerDiv.classList.remove('hidden');
-        
+
         // Setup countdown timer
         const diff = (cooldownEnd - now) * 1000;
         const countdownVal = document.getElementById('countdown-val');
@@ -320,7 +320,7 @@ export default function App() {
     };
 
     // 5. Leaderboard fetch override
-    window.renderLeaderboardUI = async function() {
+    window.renderLeaderboardUI = async function () {
       const tbody = window.DOM.leaderboardBody;
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ffcc00;">LOADING ONCHAIN RECORDS...</td></tr>';
 
@@ -348,7 +348,7 @@ export default function App() {
           })
         });
         const resData = await response.json();
-        
+
         tbody.innerHTML = '';
         if (resData.result && resData.result !== '0x') {
           // Decode array of LeaderboardEntry
@@ -363,7 +363,7 @@ export default function App() {
           // player (32 bytes - 20-byte address), score (32 bytes), bonusPoints (32 bytes)
           const hex = resData.result.substring(2);
           const len = parseInt(hex.substring(64, 128), 16);
-          
+
           const list = [];
           for (let i = 0; i < len; i++) {
             // Each entry data offset points to structure.
@@ -373,7 +373,7 @@ export default function App() {
             const playerHex = "0x" + hex.substring(baseOffset + 24, baseOffset + 64);
             const scoreVal = parseInt(hex.substring(baseOffset + 64, baseOffset + 128), 16);
             const bonusVal = parseInt(hex.substring(baseOffset + 128, baseOffset + 192), 16);
-            
+
             if (playerHex !== "0x0000000000000000000000000000000000000000") {
               list.push({ player: playerHex, score: scoreVal, bonusPoints: bonusVal });
             }
@@ -429,7 +429,7 @@ export default function App() {
           window.DOM.pause.classList.add('hidden');
           window.DOM.game.classList.remove('hidden');
           window.gameState = 'playing';
-          
+
           // Trigger original internal game start setup
           // We can find this logic in game.js lines 1220-1257
           player.x = 24.5;
@@ -488,7 +488,6 @@ export default function App() {
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'payForSession',
-          value: parseEther('0.1'),
         });
       } else if (paymentType === 'score') {
         writeContract({
@@ -496,14 +495,12 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'submitScore',
           args: [BigInt(scoreToSubmit)],
-          value: parseEther('0.1'),
         });
       } else if (paymentType === 'daily') {
         writeContract({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'dailyCheckIn',
-          value: parseEther('0.1'),
         });
       }
     } catch (e) {
@@ -528,7 +525,7 @@ export default function App() {
         <div style={bannerStyle}>
           <div style={bannerContentStyle}>
             <span style={bannerTextStyle}>Please switch to Arc Testnet to continue.</span>
-            <button 
+            <button
               style={bannerButtonStyle}
               onClick={() => switchChain({ chainId: REQUIRED_CHAIN_ID })}
             >
@@ -555,7 +552,7 @@ export default function App() {
             <p style={{ ...modalTextStyle, color: '#ffcc00' }}>
               {overlayStatus}
             </p>
-            
+
             {txError && (
               <p style={errorTextStyle}>
                 Error: {txError.shortMessage || txError.message}
