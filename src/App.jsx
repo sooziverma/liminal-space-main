@@ -115,7 +115,7 @@ export default function App() {
   const { switchChain } = useSwitchChain();
 
   // Contract Write hook
-  const { data: txHash, writeContract, isPending: isTxSending, error: txError, reset: resetTx } = useWriteContract();
+  const { data: txHash, writeContractAsync, isPending: isTxSending, error: txError, reset: resetTx } = useWriteContract();
 
   // Wait for transaction confirmation
   const { isLoading: isTxConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
@@ -484,28 +484,30 @@ export default function App() {
 
     try {
       if (paymentType === 'session') {
-        writeContract({
+        await writeContractAsync({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'payForSession',
         });
       } else if (paymentType === 'score') {
-        writeContract({
+        await writeContractAsync({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'submitScore',
           args: [BigInt(scoreToSubmit)],
         });
       } else if (paymentType === 'daily') {
-        writeContract({
+        await writeContractAsync({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'dailyCheckIn',
         });
       }
     } catch (e) {
-      console.error(e);
-      setOverlayStatus('Failed to send transaction.');
+      console.error("Transaction failed:", e);
+      setOverlayStatus("Transaction failed or rejected.");
+      setShowOverlay(false);
+      setPaymentType(null);
     }
   };
 
