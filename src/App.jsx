@@ -214,7 +214,7 @@ export default function App() {
 
   const getActiveChainId = async () => {
     try {
-      if (connector) {
+      if (connector && typeof connector.getProvider === 'function') {
         const provider = await connector.getProvider();
         if (provider && typeof provider.request === 'function') {
           const hexChainId = await provider.request({ method: 'eth_chainId' });
@@ -490,6 +490,15 @@ export default function App() {
       let hash;
       const paymentValue = parseEther('0.1');
 
+      // Fetch the exact, current on-chain nonce directly to bypass any stale wallet caching
+      let correctNonce = undefined;
+      try {
+        correctNonce = await publicClient.getTransactionCount({ address });
+        console.log("Fetched correct on-chain nonce:", correctNonce);
+      } catch (nonceErr) {
+        console.error("Failed to fetch on-chain nonce:", nonceErr);
+      }
+
       if (paymentType === 'session') {
         console.log("Calling payForSession on contract...");
         hash = await writeContractAsync({
@@ -497,6 +506,7 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'payForSession',
           value: paymentValue,
+          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       } else if (paymentType === 'score') {
         console.log(`Calling submitScore on contract with score: ${scoreToSubmit}...`);
@@ -506,6 +516,7 @@ export default function App() {
           functionName: 'submitScore',
           args: [BigInt(scoreToSubmit)],
           value: paymentValue,
+          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       } else if (paymentType === 'daily') {
         console.log("Calling dailyCheckIn on contract...");
@@ -514,6 +525,7 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'dailyCheckIn',
           value: paymentValue,
+          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       }
 
