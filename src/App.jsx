@@ -275,7 +275,7 @@ export default function App() {
 
       setPaymentType('session');
       setShowOverlay(true);
-      setOverlayStatus('Requesting 0.1 USDC payment for play session...');
+      setOverlayStatus('Requesting 0.1 native Arc testnet token payment for play session...');
     };
 
     // 2. Score submission interceptor
@@ -293,7 +293,7 @@ export default function App() {
       setScoreToSubmit(score);
       setPaymentType('score');
       setShowOverlay(true);
-      setOverlayStatus(`Requesting 0.1 USDC payment to submit score of ${score}...`);
+      setOverlayStatus(`Requesting 0.1 native Arc testnet token payment to submit score of ${score}...`);
     };
 
     // 3. Daily Claim interceptor
@@ -318,7 +318,7 @@ export default function App() {
 
       setPaymentType('daily');
       setShowOverlay(true);
-      setOverlayStatus('Requesting 0.1 USDC payment for Daily Check-In...');
+      setOverlayStatus('Requesting 0.1 native Arc testnet token payment for Daily Check-In...');
     };
 
     // 4. Update Daily UI from blockchain
@@ -361,7 +361,7 @@ export default function App() {
       } else if (canClaim) {
         claimBtn.classList.remove('disabled');
         claimBtn.disabled = false;
-        claimBtn.innerText = "CLAIM CHECK-IN (0.1 USDC)";
+        claimBtn.innerText = "CLAIM CHECK-IN (0.1 native Arc testnet token)";
         timerDiv.classList.add('hidden');
       } else {
         claimBtn.classList.add('disabled');
@@ -490,15 +490,6 @@ export default function App() {
       let hash;
       const paymentValue = parseEther('0.1');
 
-      // Fetch the exact, current on-chain nonce directly to bypass any stale wallet caching
-      let correctNonce = undefined;
-      try {
-        correctNonce = await publicClient.getTransactionCount({ address });
-        console.log("Fetched correct on-chain nonce:", correctNonce);
-      } catch (nonceErr) {
-        console.error("Failed to fetch on-chain nonce:", nonceErr);
-      }
-
       if (paymentType === 'session') {
         console.log("Calling payForSession on contract...");
         hash = await writeContractAsync({
@@ -506,7 +497,6 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'payForSession',
           value: paymentValue,
-          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       } else if (paymentType === 'score') {
         console.log(`Calling submitScore on contract with score: ${scoreToSubmit}...`);
@@ -516,7 +506,6 @@ export default function App() {
           functionName: 'submitScore',
           args: [BigInt(scoreToSubmit)],
           value: paymentValue,
-          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       } else if (paymentType === 'daily') {
         console.log("Calling dailyCheckIn on contract...");
@@ -525,7 +514,6 @@ export default function App() {
           abi: CONTRACT_ABI,
           functionName: 'dailyCheckIn',
           value: paymentValue,
-          ...(correctNonce !== undefined ? { nonce: correctNonce } : {}),
         });
       }
 
@@ -540,83 +528,12 @@ export default function App() {
       setLocalConfirming(true);
       setOverlayStatus("Confirming on blockchain...");
 
-      console.log("Waiting for transaction receipt (raw direct RPC polling) for hash:", hash);
-      let receipt = null;
-      const startTime = Date.now();
-      const timeoutMs = 60000; // 60 seconds timeout
+      console.log("Waiting for transaction receipt (publicClient.waitForTransactionReceipt) for hash:", hash);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      console.log("Found transaction receipt:", receipt);
 
-      while (!receipt && (Date.now() - startTime < timeoutMs)) {
-        try {
-          console.log(`polling receipt for ${hash}...`);
-          const res = await fetch("https://rpc.testnet.arc.network", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: 3,
-              method: "eth_getTransactionReceipt",
-              params: [hash]
-            })
-          });
-          const resData = await res.json();
-          if (resData.result) {
-            receipt = resData.result;
-            console.log("Found transaction receipt:", receipt);
-            break;
-          }
-        } catch (pollErr) {
-          console.error("Error polling receipt:", pollErr);
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-
-      const status = receipt ? receipt.status : null;
-      console.log("receipt result:", receipt);
-      console.log("receipt status:", status);
-
-      // On EVM, receipt.status is "0x1" (success) or "0x0" (failure), or 1 / 0
-      if (!receipt) {
-        throw new Error("Transaction confirmation timed out (60s).");
-      }
-
-      if (status !== "0x1" && status !== 1 && status !== "1") {
-        // Try to fetch revert reason
-        let revertReason = "Transaction reverted on chain.";
-        try {
-          console.log("Attempting to fetch transaction revert reason...");
-          const txRes = await fetch("https://rpc.testnet.arc.network", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: 4,
-              method: "eth_getTransactionByHash",
-              params: [hash]
-            })
-          });
-          const txData = await txRes.json();
-          if (txData.result) {
-            console.log("Transaction details:", txData.result);
-            const callRes = await fetch("https://rpc.testnet.arc.network", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: 5,
-                method: "eth_call",
-                params: [txData.result, "latest"]
-              })
-            });
-            const callData = await callRes.json();
-            if (callData.error) {
-              revertReason = callData.error.message;
-            }
-          }
-        } catch (revertErr) {
-          console.error("Error fetching revert reason:", revertErr);
-        }
-        console.error("contract revert reason:", revertReason);
-        throw new Error(revertReason);
+      if (receipt.status !== 'success') {
+        throw new Error("Transaction reverted on chain.");
       }
 
       // Success
@@ -696,14 +613,14 @@ export default function App() {
         <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
       </div>
 
-      {/* USDC Transaction Confirmation Overlay */}
+      {/* Native Arc Testnet Token Transaction Confirmation Overlay */}
       {showOverlay && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
-            <h2 style={modalHeaderStyle}>USDC PAYMENT REQUIRED</h2>
+            <h2 style={modalHeaderStyle}>NATIVE ARC TESTNET TOKEN PAYMENT REQUIRED</h2>
             <div style={dividerStyle}></div>
             <p style={modalTextStyle}>
-              This action requires a payment of exactly <b>0.1 USDC</b> on Arc Testnet.
+              This action requires a payment of exactly <b>0.1 native Arc testnet token</b> on Arc Testnet.
             </p>
             <p style={{ ...modalTextStyle, color: '#ffcc00' }}>
               {overlayStatus}
