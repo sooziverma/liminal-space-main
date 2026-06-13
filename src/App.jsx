@@ -524,14 +524,36 @@ export default function App() {
 
   // Helper to wait for transaction receipt with a 60-second timeout
   const waitForReceiptWithTimeout = async (txHash, label) => {
-    console.log(`Waiting for receipt for ${label} (hash: ${txHash})...`);
-    const receiptPromise = publicClient.waitForTransactionReceipt({ hash: txHash });
+    console.log(`[Receipt Detection] Starting receipt polling for ${label} (hash: ${txHash})...`);
+    console.log(`[Receipt Detection] Using contract address: ${CONTRACT_ADDRESS}, USDC address: ${USDC_TOKEN_ADDRESS}`);
+    console.log(`[Receipt Detection] PublicClient active chain ID: ${publicClient?.chain?.id}, expected chain ID: ${REQUIRED_CHAIN_ID}, RPC URL: https://rpc.testnet.arc.network`);
     
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} transaction confirmation timed out after 60 seconds.`)), 60000);
-    });
+    const startTime = Date.now();
+    const timeoutMs = 60000; // 60 seconds timeout
+    let attempt = 0;
+
+    while (Date.now() - startTime < timeoutMs) {
+      attempt++;
+      try {
+        console.log(`[Receipt Detection] Polling attempt #${attempt} for hash ${txHash}...`);
+        
+        // Single direct RPC call to eth_getTransactionReceipt
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        
+        if (receipt) {
+          console.log(`[Receipt Detection] SUCCESS: Found receipt on attempt #${attempt} for ${label}!`, receipt);
+          console.log(`[Receipt Detection] Receipt Status: ${receipt.status}, Block Number: ${receipt.blockNumber.toString()}`);
+          return receipt;
+        }
+      } catch (pollErr) {
+        console.warn(`[Receipt Detection] Attempt #${attempt} failed with error:`, pollErr);
+      }
+      
+      // Wait for 1.5 seconds before polling again
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
     
-    return Promise.race([receiptPromise, timeoutPromise]);
+    throw new Error(`${label} transaction receipt confirmation timed out after 60 seconds.`);
   };
 
   // Run the transaction
