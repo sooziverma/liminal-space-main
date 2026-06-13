@@ -4,8 +4,8 @@ import {
   useChainId,
   useSwitchChain,
   useWriteContract,
-  useWaitForTransactionReceipt,
-  useReadContract
+  useReadContract,
+  usePublicClient
 } from 'wagmi';
 import { parseEther } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -107,20 +107,25 @@ const CONTRACT_ABI = [
 
 // Deployed smart contract address on Arc Testnet
 const CONTRACT_ADDRESS = "0xeF0867eC5EA5C66A4c5eD06AE5dae5984CE8e882";
-const REQUIRED_CHAIN_ID = 5042002; // Arc Testnet
+const REQUIRED_CHAIN_ID = 504202; // Arc Testnet
+const ALTERNATIVE_CHAIN_ID = 5042002; // RPC returns this
+const isArcTestnet = (id) => id === REQUIRED_CHAIN_ID || id === ALTERNATIVE_CHAIN_ID;
+
+let originalStartGame = null;
 
 export default function App() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
+  const { switchChain, switchChainAsync } = useSwitchChain();
+  const publicClient = usePublicClient();
 
   // Contract Write hook
-  const { data: txHash, writeContractAsync, isPending: isTxSending, error: txError, reset: resetTx } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
 
-  // Wait for transaction confirmation
-  const { isLoading: isTxConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
+  // Local transaction state variables for robustness and avoiding stale React states
+  const [localSending, setLocalSending] = useState(false);
+  const [localConfirming, setLocalConfirming] = useState(false);
+  const [localError, setLocalError] = useState(null);
 
   const [paymentType, setPaymentType] = useState(null); // 'session', 'score', 'daily'
   const [scoreToSubmit, setScoreToSubmit] = useState(0);
@@ -141,7 +146,7 @@ export default function App() {
 
   // Fetch user stats from blockchain via direct call using ethers/viem
   const fetchStats = async () => {
-    if (!isConnected || !address || chainId !== REQUIRED_CHAIN_ID || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
+    if (!isConnected || !address || !isArcTestnet(chainId) || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
     try {
       // We read the stats via fetch/JSON-RPC directly since we are integrating into wagmi.
       // Alternatively, we use standard fetch or useReadContract (readContract is cleaner).
@@ -180,7 +185,7 @@ export default function App() {
 
   useEffect(() => {
     fetchStats();
-  }, [address, isConnected, chainId, isTxSuccess]);
+  }, [address, isConnected, chainId]);
 
   // Sync React state to HTML UI
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function App() {
 
   // Chain changes monitoring during gameplay
   useEffect(() => {
-    if (isConnected && chainId !== REQUIRED_CHAIN_ID && window.gameState === 'playing') {
+    if (isConnected && !isArcTestnet(chainId) && window.gameState === 'playing') {
       // Pause game immediately and show warning
       if (window.pauseGame) {
         window.pauseGame();
@@ -207,17 +212,55 @@ export default function App() {
     }
   }, [chainId, isConnected]);
 
+  const getActiveChainId = async () => {
+    try {
+      if (connector) {
+        const provider = await connector.getProvider();
+        if (provider && typeof provider.request === 'function') {
+          const hexChainId = await provider.request({ method: 'eth_chainId' });
+          return parseInt(hexChainId, 16);
+        }
+      }
+      if (window.ethereum) {
+        const hexChainId = await window.ethereum.request({ method: 'eth_chainId' });
+        return parseInt(hexChainId, 16);
+      }
+    } catch (err) {
+      console.error("Error detecting chain ID directly:", err);
+    }
+    return chainId;
+  };
+
+  const ensureCorrectNetwork = async () => {
+    const activeChain = await getActiveChainId();
+    if (isArcTestnet(activeChain)) {
+      return true;
+    }
+    try {
+      await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
+      const newChain = await getActiveChainId();
+      return isArcTestnet(newChain);
+    } catch (err) {
+      console.error("Failed to switch chain:", err);
+      return false;
+    }
+  };
+
   // Hooking up global functions in game.js
   useEffect(() => {
     // 1. Play Session interceptor
-    const originalStartGame = window.startGame;
+    if (window.startGame && window.startGame !== originalStartGame) {
+      originalStartGame = window.startGame;
+    }
+
     window.startGame = async function () {
       if (!isConnected) {
         alert("Wallet connection is required to start a game session.");
         return;
       }
-      if (chainId !== REQUIRED_CHAIN_ID) {
-        alert("Please switch to Arc Testnet to start a game session.");
+      const onCorrect = await ensureCorrectNetwork();
+      if (!onCorrect) {
+        alert("Please connect/switch to Arc Testnet to start a game session.");
         return;
       }
 
@@ -227,9 +270,14 @@ export default function App() {
     };
 
     // 2. Score submission interceptor
-    window.submitScoreToLeaderboard = function (score, kills) {
-      if (!isConnected || chainId !== REQUIRED_CHAIN_ID) {
-        console.warn("Wallet not connected to Arc Testnet, skipping onchain leaderboard submission.");
+    window.submitScoreToLeaderboard = async function (score, kills) {
+      if (!isConnected) {
+        console.warn("Wallet not connected, skipping onchain leaderboard submission.");
+        return;
+      }
+      const onCorrect = await ensureCorrectNetwork();
+      if (!onCorrect) {
+        console.warn("Wallet not on Arc Testnet, skipping onchain leaderboard submission.");
         return;
       }
 
@@ -240,8 +288,13 @@ export default function App() {
     };
 
     // 3. Daily Claim interceptor
-    window.claimDailyReward = function () {
-      if (!isConnected || chainId !== REQUIRED_CHAIN_ID) {
+    window.claimDailyReward = async function () {
+      if (!isConnected) {
+        alert("Please connect your wallet first.");
+        return;
+      }
+      const onCorrect = await ensureCorrectNetwork();
+      if (!onCorrect) {
         alert("Please connect to Arc Testnet to claim daily rewards.");
         return;
       }
@@ -351,24 +404,11 @@ export default function App() {
 
         tbody.innerHTML = '';
         if (resData.result && resData.result !== '0x') {
-          // Decode array of LeaderboardEntry
-          // LeaderboardEntry struct: address player, uint256 score, uint256 bonusPoints
-          // Layout in eth_call result:
-          // 0x00..20: offset to array (0x20)
-          // 0x20..40: length of array (N)
-          // For each element (which are elements of dynamic struct):
-          // offset to struct, offset to struct, etc.
-          // Since solidity structs are padded to 32 bytes:
-          // Let's decode this simply. Each entry has:
-          // player (32 bytes - 20-byte address), score (32 bytes), bonusPoints (32 bytes)
           const hex = resData.result.substring(2);
           const len = parseInt(hex.substring(64, 128), 16);
 
           const list = [];
           for (let i = 0; i < len; i++) {
-            // Each entry data offset points to structure.
-            // Since it's a fixed size struct (address + uint + uint), they are laid out sequentially.
-            // Offset start for elements is at 128 + N * 32
             const baseOffset = 128 + len * 64 + i * 96;
             const playerHex = "0x" + hex.substring(baseOffset + 24, baseOffset + 64);
             const scoreVal = parseInt(hex.substring(baseOffset + 64, baseOffset + 128), 16);
@@ -409,62 +449,117 @@ export default function App() {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff3333;">ERROR LOADING ONCHAIN RECORDS</td></tr>';
       }
     };
+  }, [isConnected, address, web3Stats]);
 
-    return () => {
-      window.startGame = originalStartGame;
-    };
-  }, [isConnected, chainId, address, web3Stats]);
+  // Run the transaction
+  const executePayment = async () => {
+    // Log current info for debugging
+    const currentChainId = await getActiveChainId();
+    console.log("=== Transaction Execution Started ===");
+    console.log("current chainId:", currentChainId);
+    console.log("required chainId:", REQUIRED_CHAIN_ID);
+    console.log("connected wallet address:", address);
 
-  // Handle transaction confirmation actions
-  useEffect(() => {
-    if (isTxSuccess) {
-      setShowOverlay(false);
-      resetTx();
+    // Verify network directly before transaction starts
+    const onCorrectNetwork = await ensureCorrectNetwork();
+    if (!onCorrectNetwork) {
+      console.warn("Chain check failed, canceling transaction execution.");
+      setLocalError({ message: "Incorrect network. Please switch to Arc Testnet." });
+      return;
+    }
+
+    setLocalSending(true);
+    setLocalConfirming(false);
+    setLocalError(null);
+    setOverlayStatus("Confirming in wallet...");
+
+    try {
+      let hash;
+      const paymentValue = parseEther('0.1');
 
       if (paymentType === 'session') {
-        // Play Session Payment successful! Start game.
-        if (window.DOM) {
-          window.DOM.home.classList.add('hidden');
-          window.DOM.gameover.classList.add('hidden');
-          window.DOM.pause.classList.add('hidden');
-          window.DOM.game.classList.remove('hidden');
-          window.gameState = 'playing';
+        console.log("Calling payForSession on contract...");
+        hash = await writeContractAsync({
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'payForSession',
+          value: paymentValue,
+        });
+      } else if (paymentType === 'score') {
+        console.log(`Calling submitScore on contract with score: ${scoreToSubmit}...`);
+        hash = await writeContractAsync({
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'submitScore',
+          args: [BigInt(scoreToSubmit)],
+          value: paymentValue,
+        });
+      } else if (paymentType === 'daily') {
+        console.log("Calling dailyCheckIn on contract...");
+        hash = await writeContractAsync({
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'dailyCheckIn',
+          value: paymentValue,
+        });
+      }
 
-          // Trigger original internal game start setup
-          // We can find this logic in game.js lines 1220-1257
-          player.x = 24.5;
-          player.y = 24.5;
-          player.angle = 0.0;
-          player.hp = 100;
-          player.score = 0;
-          player.kills = 0;
-          player.shootCooldown = 0.0;
-          player.shootAnimTimer = 0.0;
-          player.bobTimer = 0.0;
-          player.isMoving = false;
+      console.log("tx hash returned:", hash);
 
-          sprites.length = 0;
-          nextSpawnTimer = 10.0;
+      if (!hash) {
+        throw new Error("No transaction hash returned.");
+      }
 
-          for (let i = 0; i < 6; i++) {
-            spawnEnemyDistributed();
+      // Real transaction hash returned
+      setLocalSending(false);
+      setLocalConfirming(true);
+      setOverlayStatus("Confirming on blockchain...");
+
+      console.log("Waiting for transaction receipt (raw direct RPC polling) for hash:", hash);
+      let receipt = null;
+      const startTime = Date.now();
+      const timeoutMs = 60000; // 60 seconds timeout
+
+      while (!receipt && (Date.now() - startTime < timeoutMs)) {
+        try {
+          const res = await fetch("https://rpc.testnet.arc.network", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 3,
+              method: "eth_getTransactionReceipt",
+              params: [hash]
+            })
+          });
+          const resData = await res.json();
+          if (resData.result) {
+            receipt = resData.result;
+            console.log("Found transaction receipt:", receipt);
+            break;
           }
+        } catch (pollErr) {
+          console.error("Error polling receipt:", pollErr);
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
 
-          sounds.init();
-          sounds.startHum();
+      const status = receipt ? receipt.status : null;
+      console.log("receipt status:", status);
 
-          if (isMobile) {
-            document.getElementById('pc-mouse-lock-hint').classList.add('hidden');
-            document.querySelector('.mobile-controls-layer').style.display = 'flex';
-          } else {
-            if (document.pointerLockElement !== window.DOM.canvas) {
-              window.DOM.canvas.requestPointerLock();
-            }
-            document.querySelector('.mobile-controls-layer').style.display = 'none';
-          }
+      // On EVM, receipt.status is "0x1" (success) or "0x0" (failure), or 1 / 0
+      if (!receipt || (status !== "0x1" && status !== 1 && status !== "1")) {
+        throw new Error(receipt ? "Transaction failed on blockchain." : "Transaction confirmation timed out.");
+      }
 
-          updateHUD();
-          fetchStats();
+      // Success
+      setLocalConfirming(false);
+      setShowOverlay(false);
+
+      if (paymentType === 'session') {
+        alert("Play Session payment confirmed! Starting game.");
+        if (originalStartGame) {
+          originalStartGame();
         }
       } else if (paymentType === 'score') {
         alert("Score successfully submitted onchain!");
@@ -475,50 +570,42 @@ export default function App() {
         alert("Daily Check-In successful! 10 Bonus Points granted.");
         fetchStats();
       }
-    }
-  }, [isTxSuccess, paymentType]);
 
-  // Run the transaction
-  const executePayment = async () => {
-    if (!isConnected || chainId !== REQUIRED_CHAIN_ID) return;
+      setPaymentType(null);
 
-    try {
-      if (paymentType === 'session') {
-        await writeContractAsync({
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'payForSession',
-        });
-      } else if (paymentType === 'score') {
-        await writeContractAsync({
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'submitScore',
-          args: [BigInt(scoreToSubmit)],
-        });
-      } else if (paymentType === 'daily') {
-        await writeContractAsync({
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'dailyCheckIn',
-        });
-      }
-    } catch (e) {
-      console.error("Transaction failed:", e);
-      setOverlayStatus("Transaction failed or rejected.");
+    } catch (err) {
+      console.error("contract error if any:", err);
+
+      setLocalSending(false);
+      setLocalConfirming(false);
       setShowOverlay(false);
       setPaymentType(null);
+
+      // Detect user rejection vs general failure
+      const errMsg = (err.shortMessage || err.message || "").toLowerCase();
+      const isRejected = errMsg.includes("user rejected") ||
+        errMsg.includes("user denied") ||
+        errMsg.includes("rejected") ||
+        err.code === 4001;
+
+      if (isRejected) {
+        alert("Transaction rejected.");
+      } else {
+        alert("Transaction failed.");
+      }
     }
   };
 
   const cancelPayment = () => {
     setShowOverlay(false);
-    resetTx();
+    setLocalSending(false);
+    setLocalConfirming(false);
+    setLocalError(null);
     setPaymentType(null);
   };
 
   // Warning banner for incorrect network
-  const showWarningBanner = isConnected && chainId !== REQUIRED_CHAIN_ID;
+  const showWarningBanner = isConnected && !isArcTestnet(chainId);
 
   return (
     <>
@@ -555,22 +642,22 @@ export default function App() {
               {overlayStatus}
             </p>
 
-            {txError && (
+            {localError && (
               <p style={errorTextStyle}>
-                Error: {txError.shortMessage || txError.message}
+                Error: {localError.shortMessage || localError.message}
               </p>
             )}
 
-            {(isTxSending || isTxConfirming) && (
+            {(localSending || localConfirming) && (
               <div style={loadingContainerStyle}>
                 <div style={spinnerStyle}></div>
                 <span style={loadingTextStyle}>
-                  {isTxSending ? 'Confirming in wallet...' : 'Confirming on blockchain...'}
+                  {localSending ? 'Confirming in wallet...' : 'Confirming on blockchain...'}
                 </span>
               </div>
             )}
 
-            {!isTxSending && !isTxConfirming && (
+            {!localSending && !localConfirming && (
               <div style={btnContainerStyle}>
                 <button style={primaryBtnStyle} onClick={executePayment}>
                   CONFIRM & PAY

@@ -8,7 +8,7 @@ import App from './App.jsx';
 
 // Define the Arc Testnet chain specifications
 const arcTestnet = {
-  id: 5042002,
+  id: 504202,
   name: 'Arc Testnet',
   nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: {
