@@ -1397,54 +1397,19 @@ function shootPlayerWeapon() {
     if (player.shootCooldown > 0) return;
 
     sounds.playShoot();
-    player.shootCooldown = 0.35;
+    player.shootCooldown = 0.08;
     player.shootAnimTimer = 0.18;
 
-    let closestEnemy = null;
-    let closestDist = Infinity;
-
-    sprites.forEach(s => {
-        if (s.type !== 'enemy' || s.hp <= 0) return;
-
-        const enemyAngle = Math.atan2(s.y - player.y, s.x - player.x);
-        let diff = enemyAngle - player.angle;
-
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-
-        const dist = Math.sqrt((s.x - player.x) ** 2 + (s.y - player.y) ** 2);
-        const hitWidth = 0.22 / dist;
-
-        if (Math.abs(diff) < Math.max(0.12, hitWidth)) {
-            if (hasLineOfSight(player.x, player.y, s.x, s.y)) {
-                if (dist < 12.0 && dist < closestDist) {
-                    closestDist = dist;
-                    closestEnemy = s;
-                }
-            }
-        }
+    const bulletSpeed = 12;
+    sprites.push({
+        type: 'bullet',
+        x: player.x + Math.cos(player.angle) * 0.6,
+        y: player.y + Math.sin(player.angle) * 0.6,
+        vx: Math.cos(player.angle) * bulletSpeed,
+        vy: Math.sin(player.angle) * bulletSpeed,
+        life: 1.5,
+        damage: 10
     });
-
-    if (closestEnemy) {
-        closestEnemy.hp -= 10;
-        closestEnemy.hitFlashTimer = 0.12;
-        sounds.playHit();
-
-        sprites.push({
-            x: closestEnemy.x + (Math.random() - 0.5) * 0.2,
-            y: closestEnemy.y + (Math.random() - 0.5) * 0.2,
-            type: 'spark',
-            timer: 0.15
-        });
-
-        if (closestEnemy.hp <= 0) {
-            closestEnemy.state = 'dead';
-            sounds.playDeath();
-            player.score += 150;
-            player.kills += 1;
-            updateHUD();
-        }
-    }
 }
 
 // Checks if line of sight is clear from A to B (DDA check)
@@ -1519,6 +1484,7 @@ function updateGameLogic(dt) {
     if (player.shootAnimTimer > 0) player.shootAnimTimer -= dt;
 
     if (isSpaceHeld) {
+        console.log("HOLDING SPACE");
         shootPlayerWeapon();
     }
 
@@ -1593,6 +1559,52 @@ function updateGameLogic(dt) {
         if (s.type === 'spark') {
             s.timer -= dt;
             return s.timer > 0;
+        }
+
+        if (s.type === 'bullet') {
+            s.x += s.vx * dt;
+            s.y += s.vy * dt;
+            s.life -= dt;
+
+            // Check wall collision to remove bullet
+            if (checkWallCollision(s.x, s.y)) {
+                return false;
+            }
+
+            // Check hit against enemies
+            let hitEnemy = false;
+            sprites.forEach(e => {
+                if (e.type === 'enemy' && e.hp > 0) {
+                    const dist = Math.sqrt((e.x - s.x) ** 2 + (e.y - s.y) ** 2);
+                    if (dist < 0.4) {
+                        e.hp -= s.damage || 10;
+                        e.hitFlashTimer = 0.12;
+                        sounds.playHit();
+                        
+                        // Spawn impact spark
+                        sprites.push({
+                            x: e.x + (Math.random() - 0.5) * 0.2,
+                            y: e.y + (Math.random() - 0.5) * 0.2,
+                            type: 'spark',
+                            timer: 0.15
+                        });
+                        
+                        if (e.hp <= 0) {
+                            e.state = 'dead';
+                            sounds.playDeath();
+                            player.score += 150;
+                            player.kills += 1;
+                            updateHUD();
+                        }
+                        
+                        hitEnemy = true;
+                    }
+                }
+            });
+
+            if (hitEnemy) return false;
+
+            return s.life > 0;
         }
 
         if (s.type === 'enemy') {
@@ -1864,6 +1876,15 @@ function renderGame3D() {
             sc.beginPath(); sc.arc(16, 16, 6 + Math.random() * 4, 0, Math.PI * 2); sc.fill();
             sc.fillStyle = '#ffffff';
             sc.beginPath(); sc.arc(16, 16, 3, 0, Math.PI * 2); sc.fill();
+        } else if (s.type === 'bullet') {
+            spriteCanvas = document.createElement('canvas');
+            spriteCanvas.width = 16;
+            spriteCanvas.height = 16;
+            const sc = spriteCanvas.getContext('2d');
+            sc.fillStyle = '#ffcc00';
+            sc.beginPath(); sc.arc(8, 8, 4, 0, Math.PI * 2); sc.fill();
+            sc.fillStyle = '#ffffff';
+            sc.beginPath(); sc.arc(8, 8, 1.5, 0, Math.PI * 2); sc.fill();
         } else {
             if (s.state === 'dead') {
                 spriteCanvas = enemyDeadCanvas;
