@@ -635,6 +635,7 @@ DOM.canvas.height = RENDER_HEIGHT;
 
 // ================= KEYBOARD CONTROLS (DESKTOP TESTING) =================
 const keys = {};
+let isSpaceHeld = false;
 
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -642,6 +643,10 @@ window.addEventListener('keydown', (e) => {
 
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
+    }
+
+    if (e.code === 'Space') {
+        isSpaceHeld = true;
     }
 
     if (e.code === 'Escape') {
@@ -659,6 +664,9 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
     keys[e.code] = false;
+    if (e.code === 'Space') {
+        isSpaceHeld = false;
+    }
 });
 // ================= INITIALIZATION & SETUP =================
 window.addEventListener('load', () => {
@@ -1509,6 +1517,10 @@ function gameLoop() {
 function updateGameLogic(dt) {
     if (player.shootCooldown > 0) player.shootCooldown -= dt;
     if (player.shootAnimTimer > 0) player.shootAnimTimer -= dt;
+
+    if (isSpaceHeld) {
+        shootPlayerWeapon();
+    }
 
     // Inputs (Keyboard + Touch Joystick)
     let moveDirX = 0.0;
