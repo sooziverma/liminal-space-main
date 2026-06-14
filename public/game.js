@@ -1353,7 +1353,7 @@ function spawnEnemyDistributed() {
             if (!checkWallCollision(sx, sy)) {
                 // Ensure medium distance from the player
                 const distToPlayer = Math.sqrt((player.x - sx) ** 2 + (player.y - sy) ** 2);
-                
+
                 // Define limits based on attempt count to prevent deadlocks
                 const minPlayerDist = (attempts < 70) ? 9.0 : 7.0;
                 const maxPlayerDist = (attempts < 70) ? 26.0 : 32.0;
@@ -1586,7 +1586,7 @@ function updateGameLogic(dt) {
                         e.hp -= s.damage || 10;
                         e.hitFlashTimer = 0.12;
                         sounds.playHit();
-                        
+
                         // Spawn impact spark
                         sprites.push({
                             x: e.x + (Math.random() - 0.5) * 0.2,
@@ -1594,7 +1594,7 @@ function updateGameLogic(dt) {
                             type: 'spark',
                             timer: 0.15
                         });
-                        
+
                         if (e.hp <= 0) {
                             e.state = 'dead';
                             sounds.playDeath();
@@ -1602,7 +1602,7 @@ function updateGameLogic(dt) {
                             player.kills += 1;
                             updateHUD();
                         }
-                        
+
                         hitEnemy = true;
                     }
                 }
@@ -1620,7 +1620,7 @@ function updateGameLogic(dt) {
 
             // 1. Check hit against player FIRST (robust radius of 1.0)
             const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
-            if (dist < 1.0) {
+            if (dist < 2.5) {
                 console.log("ENEMY BULLET HIT PLAYER");
                 damagePlayer(5);
                 return false;
