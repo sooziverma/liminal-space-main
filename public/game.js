@@ -1238,10 +1238,10 @@ function startGame() {
 
     // Reset spawner and entities
     sprites = [];
-    nextSpawnTimer = 10.0;
+    nextSpawnTimer = 6.5;
 
-    // Spawn initial 6 enemies distributed in all quadrants
-    for (let i = 0; i < 6; i++) {
+    // Spawn initial 8 enemies distributed
+    for (let i = 0; i < 8; i++) {
         spawnEnemyDistributed();
     }
 
@@ -1339,31 +1339,10 @@ function checkWallCollision(x, y) {
 // Spawns enemy sprites in random empty corridors distributed by quadrants
 function spawnEnemyDistributed() {
     let attempts = 0;
-    while (attempts < 80) {
-        // Random quadrant: 0 = TopLeft, 1 = TopRight, 2 = BottomLeft, 3 = BottomRight
-        const quadrant = Math.floor(Math.random() * 4);
-        let minX = 1, maxX = MAP_WIDTH - 2;
-        let minY = 1, maxY = MAP_HEIGHT - 2;
-
-        const halfWidth = Math.floor(MAP_WIDTH / 2);
-        const halfHeight = Math.floor(MAP_HEIGHT / 2);
-
-        if (quadrant === 0) {
-            maxX = halfWidth;
-            maxY = halfHeight;
-        } else if (quadrant === 1) {
-            minX = halfWidth;
-            maxY = halfHeight;
-        } else if (quadrant === 2) {
-            maxX = halfWidth;
-            minY = halfHeight;
-        } else {
-            minX = halfWidth;
-            minY = halfHeight;
-        }
-
-        const rx = minX + Math.floor(Math.random() * (maxX - minX));
-        const ry = minY + Math.floor(Math.random() * (maxY - minY));
+    while (attempts < 100) {
+        // Random cell in the map
+        const rx = 1 + Math.floor(Math.random() * (MAP_WIDTH - 2));
+        const ry = 1 + Math.floor(Math.random() * (MAP_HEIGHT - 2));
 
         if (MAP[ry][rx] === 0) {
             // Choose a randomized float position within this cell
@@ -1372,12 +1351,17 @@ function spawnEnemyDistributed() {
 
             // Ensure not colliding with any walls
             if (!checkWallCollision(sx, sy)) {
-                // Ensure minimum distance from the player
+                // Ensure medium distance from the player
                 const distToPlayer = Math.sqrt((player.x - sx) ** 2 + (player.y - sy) ** 2);
-                if (distToPlayer >= 7.0) {
+                
+                // Define limits based on attempt count to prevent deadlocks
+                const minPlayerDist = (attempts < 70) ? 9.0 : 7.0;
+                const maxPlayerDist = (attempts < 70) ? 26.0 : 32.0;
+
+                if (distToPlayer >= minPlayerDist && distToPlayer <= maxPlayerDist) {
                     // Ensure minimum distance from other enemies
                     let tooCloseToOtherEnemy = false;
-                    const minEnemyDist = (attempts < 60) ? 3.0 : 1.5; // Relax check if struggling
+                    const minEnemyDist = (attempts < 60) ? 3.0 : ((attempts < 85) ? 1.5 : 1.0);
 
                     for (let s of sprites) {
                         if (s.type === 'enemy' && s.hp > 0) {
@@ -1565,10 +1549,10 @@ function updateGameLogic(dt) {
         debugDiv.innerText = `POS: X=${player.x.toFixed(2)}, Y=${player.y.toFixed(2)} | CELL=${cellVal}`;
     }
 
-    // Distribute Spawning over quadrants gradually (exactly every 10 seconds)
+    // Distribute Spawning over quadrants gradually (exactly every 6.5 seconds)
     nextSpawnTimer -= dt;
     if (nextSpawnTimer <= 0) {
-        nextSpawnTimer = 10.0;
+        nextSpawnTimer = 6.5;
         // Scale spawned enemy count over time based on kills
         const spawnCount = 1 + Math.floor(player.kills / 5);
         for (let i = 0; i < spawnCount; i++) {
@@ -1634,15 +1618,15 @@ function updateGameLogic(dt) {
             s.y += s.vy * dt;
             s.life -= dt;
 
-            // Check wall collision to remove bullet
-            if (checkWallCollision(s.x, s.y)) {
+            // 1. Check hit against player FIRST (robust radius of 0.55)
+            const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
+            if (dist < 0.55) {
+                damagePlayer(5);
                 return false;
             }
 
-            // Check hit against player
-            const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
-            if (dist < 0.4) {
-                damagePlayer(s.damage || 5);
+            // 2. Check wall collision
+            if (checkWallCollision(s.x, s.y)) {
                 return false;
             }
 
