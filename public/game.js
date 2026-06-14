@@ -1339,7 +1339,7 @@ function checkWallCollision(x, y) {
 // Spawns enemy sprites in random empty corridors distributed by quadrants
 function spawnEnemyDistributed() {
     let attempts = 0;
-    while (attempts < 50) {
+    while (attempts < 80) {
         // Random quadrant: 0 = TopLeft, 1 = TopRight, 2 = BottomLeft, 3 = BottomRight
         const quadrant = Math.floor(Math.random() * 4);
         let minX = 1, maxX = MAP_WIDTH - 2;
@@ -1362,28 +1362,51 @@ function spawnEnemyDistributed() {
             minY = halfHeight;
         }
 
-        let rx = minX + Math.floor(Math.random() * (maxX - minX));
-        let ry = minY + Math.floor(Math.random() * (maxY - minY));
+        const rx = minX + Math.floor(Math.random() * (maxX - minX));
+        const ry = minY + Math.floor(Math.random() * (maxY - minY));
 
         if (MAP[ry][rx] === 0) {
-            let distSq = (player.x - (rx + 0.5)) ** 2 + (player.y - (ry + 0.5)) ** 2;
-            // Prevent spawning directly on player
-            if (distSq > 144) {
-                sprites.push({
-                    x: rx + 0.5,
-                    y: ry + 0.5,
-                    type: 'enemy',
-                    hp: 20,
-                    state: 'patrol',
-                    patrolTimer: Math.random() * 2.0,
-                    patrolDirAngle: Math.random() * Math.PI * 2,
-                    shootCooldown: 1.0 + Math.random() * 1.5,
-                    animFrame: 'idle',
-                    animTimer: 0.0,
-                    hitFlashTimer: 0.0,
-                    speed: 1.2
-                });
-                return true;
+            // Choose a randomized float position within this cell
+            const sx = rx + 0.15 + Math.random() * 0.7;
+            const sy = ry + 0.15 + Math.random() * 0.7;
+
+            // Ensure not colliding with any walls
+            if (!checkWallCollision(sx, sy)) {
+                // Ensure minimum distance from the player
+                const distToPlayer = Math.sqrt((player.x - sx) ** 2 + (player.y - sy) ** 2);
+                if (distToPlayer >= 7.0) {
+                    // Ensure minimum distance from other enemies
+                    let tooCloseToOtherEnemy = false;
+                    const minEnemyDist = (attempts < 60) ? 3.0 : 1.5; // Relax check if struggling
+
+                    for (let s of sprites) {
+                        if (s.type === 'enemy' && s.hp > 0) {
+                            const distToEnemy = Math.sqrt((s.x - sx) ** 2 + (s.y - sy) ** 2);
+                            if (distToEnemy < minEnemyDist) {
+                                tooCloseToOtherEnemy = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!tooCloseToOtherEnemy) {
+                        sprites.push({
+                            x: sx,
+                            y: sy,
+                            type: 'enemy',
+                            hp: 20,
+                            state: 'patrol',
+                            patrolTimer: Math.random() * 2.0,
+                            patrolDirAngle: Math.random() * Math.PI * 2,
+                            shootCooldown: 1.0, // Initial 1.0s cooldown
+                            animFrame: 'idle',
+                            animTimer: 0.0,
+                            hitFlashTimer: 0.0,
+                            speed: 1.2
+                        });
+                        return true;
+                    }
+                }
             }
         }
         attempts++;
@@ -1606,6 +1629,26 @@ function updateGameLogic(dt) {
             return s.life > 0;
         }
 
+        if (s.type === 'enemy_bullet') {
+            s.x += s.vx * dt;
+            s.y += s.vy * dt;
+            s.life -= dt;
+
+            // Check wall collision to remove bullet
+            if (checkWallCollision(s.x, s.y)) {
+                return false;
+            }
+
+            // Check hit against player
+            const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
+            if (dist < 0.4) {
+                damagePlayer(s.damage || 5);
+                return false;
+            }
+
+            return s.life > 0;
+        }
+
         if (s.type === 'enemy') {
             if (s.hp <= 0) {
                 s.state = 'dead';
@@ -1634,19 +1677,29 @@ function updateGameLogic(dt) {
                     if (!checkWallCollision(s.x, nextY)) s.y = nextY;
                 }
 
-                // Ranged gun shooting attack (up to 10.0 units away)
+                // Ranged gun shooting attack (up to 8.0 units away, requiring strict line-of-sight)
                 if (
-                    dist > 2.0 &&
-                    dist < 4.0 &&
+                    dist < 8.0 &&
                     s.shootCooldown <= 0 &&
-                    hasLineOfSight(s.x, s.y, player.x, player.y) &&
-                    s.visibleToPlayer === true
+                    hasLineOfSight(s.x, s.y, player.x, player.y)
                 ) {
-                    s.shootCooldown = 1.8 + Math.random() * 1.0;
+                    s.shootCooldown = 1.0;
                     s.state = 'shoot';
                     s.animTimer = 0.3;
                     sounds.playShoot();
-                    damagePlayer(5);
+
+                    // Spawn visual enemy projectile
+                    const bulletSpeed = 6.0;
+                    const angleToPlayer = Math.atan2(player.y - s.y, player.x - s.x);
+                    sprites.push({
+                        type: 'enemy_bullet',
+                        x: s.x + Math.cos(angleToPlayer) * 0.4,
+                        y: s.y + Math.sin(angleToPlayer) * 0.4,
+                        vx: Math.cos(angleToPlayer) * bulletSpeed,
+                        vy: Math.sin(angleToPlayer) * bulletSpeed,
+                        life: 2.0,
+                        damage: 5
+                    });
                 }
             } else {
                 // Wandering Patrol State
@@ -1849,10 +1902,19 @@ function renderGame3D() {
         if (transformY <= 0.1) return;
 
         const spriteScreenX = Math.floor((RENDER_WIDTH / 2) * (1 + transformX / transformY));
-        const spriteHeight = Math.abs(Math.floor(RENDER_HEIGHT / transformY));
-        const spriteWidth = Math.abs(Math.floor(RENDER_HEIGHT / transformY));
+        let spriteHeight = Math.abs(Math.floor(RENDER_HEIGHT / transformY));
+        let spriteWidth = Math.abs(Math.floor(RENDER_HEIGHT / transformY));
 
-        const drawStartY = Math.floor(-spriteHeight / 2 + RENDER_HEIGHT / 2);
+        let drawStartY;
+        if (s.type === 'enemy') {
+            const wallHeight = spriteHeight;
+            spriteHeight = Math.floor(wallHeight * 0.75);
+            spriteWidth = Math.floor(wallHeight * 0.75);
+            drawStartY = Math.floor(RENDER_HEIGHT / 2 + wallHeight / 2 - spriteHeight);
+        } else {
+            drawStartY = Math.floor(-spriteHeight / 2 + RENDER_HEIGHT / 2);
+        }
+
         const drawStartX = Math.floor(-spriteWidth / 2 + spriteScreenX);
         const drawEndX = Math.floor(spriteWidth / 2 + spriteScreenX);
         if (
@@ -1875,12 +1937,12 @@ function renderGame3D() {
             sc.beginPath(); sc.arc(16, 16, 6 + Math.random() * 4, 0, Math.PI * 2); sc.fill();
             sc.fillStyle = '#ffffff';
             sc.beginPath(); sc.arc(16, 16, 3, 0, Math.PI * 2); sc.fill();
-        } else if (s.type === 'bullet') {
+        } else if (s.type === 'bullet' || s.type === 'enemy_bullet') {
             spriteCanvas = document.createElement('canvas');
             spriteCanvas.width = 16;
             spriteCanvas.height = 16;
             const sc = spriteCanvas.getContext('2d');
-            sc.fillStyle = '#ffcc00';
+            sc.fillStyle = (s.type === 'enemy_bullet') ? '#ff3300' : '#ffcc00';
             sc.beginPath(); sc.arc(8, 8, 4, 0, Math.PI * 2); sc.fill();
             sc.fillStyle = '#ffffff';
             sc.beginPath(); sc.arc(8, 8, 1.5, 0, Math.PI * 2); sc.fill();
