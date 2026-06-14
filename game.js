@@ -1619,9 +1619,10 @@ function updateGameLogic(dt) {
             s.y += s.vy * dt;
             s.life -= dt;
 
-            // 1. Check hit against player FIRST (robust radius of 0.55)
+            // 1. Check hit against player FIRST (robust radius of 1.0)
             const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
-            if (dist < 0.55) {
+            if (dist < 1.0) {
+                console.log("ENEMY BULLET HIT PLAYER");
                 damagePlayer(5);
                 return false;
             }
