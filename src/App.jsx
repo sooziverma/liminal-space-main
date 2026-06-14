@@ -179,7 +179,8 @@ const ERC20_ABI = [
 const CONTRACT_ADDRESS = "0xAf1D3545a179769EdCD5dcCa933501dF7146f8e7";
 const USDC_TOKEN_ADDRESS = "0x3600000000000000000000000000000000000000";
 const REQUIRED_CHAIN_ID = 5042002; // Arc Testnet
-const isArcTestnet = (id) => id === REQUIRED_CHAIN_ID;
+const REQUIRED_CHAIN_IDS = [5042002, 504202]; // Support standard and legacy
+const isArcTestnet = (id) => REQUIRED_CHAIN_IDS.includes(id);
 
 let originalStartGame = null;
 
@@ -187,7 +188,8 @@ export default function App() {
   const { address, isConnected, connector } = useAccount();
   const chainId = useChainId();
   const { switchChain, switchChainAsync } = useSwitchChain();
-  const publicClient = usePublicClient();
+  const activeChainId = isArcTestnet(chainId) ? chainId : REQUIRED_CHAIN_ID;
+  const publicClient = usePublicClient({ chainId: activeChainId });
 
   // Contract Write hook
   const { writeContractAsync } = useWriteContract();
@@ -259,15 +261,16 @@ export default function App() {
 
   // Sync React state to HTML UI
   useEffect(() => {
-    if (!window.DOM) return;
+    const usernameLabel = document.getElementById('home-username');
+    const coinsLabel = document.getElementById('home-coins-badge');
 
     // Update Identifier and coins badge
     if (isConnected && address) {
-      window.DOM.usernameLabel.innerText = shortenAddress(address);
-      window.DOM.coinsLabel.innerText = `🎁 ${web3Stats.bonusPoints} BP`;
+      if (usernameLabel) usernameLabel.innerText = shortenAddress(address);
+      if (coinsLabel) coinsLabel.innerText = `🎁 ${web3Stats.bonusPoints} BP`;
     } else {
-      window.DOM.usernameLabel.innerText = "No Wallet Connected";
-      window.DOM.coinsLabel.innerText = "🪙 0";
+      if (usernameLabel) usernameLabel.innerText = "No Wallet Connected";
+      if (coinsLabel) coinsLabel.innerText = "🪙 0";
     }
   }, [isConnected, address, web3Stats]);
 
@@ -307,12 +310,19 @@ export default function App() {
       return true;
     }
     try {
-      console.log("Not on Arc Testnet. Prompting chain switch to:", REQUIRED_CHAIN_ID);
+      console.log("Not on Arc Testnet. Prompting chain switch to preferred ID:", REQUIRED_CHAIN_ID);
       await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
       const newChain = await getActiveChainId();
       return isArcTestnet(newChain);
     } catch (err) {
-      console.error("Failed to switch chain to Arc Testnet:", err);
+      console.warn("Failed to switch chain to preferred Arc Testnet ID, trying legacy ID 504202:", err);
+      try {
+        await switchChainAsync({ chainId: 504202 });
+        const newChain = await getActiveChainId();
+        return isArcTestnet(newChain);
+      } catch (fallbackErr) {
+        console.error("Failed fallback chain switch to 504202:", fallbackErr);
+      }
       return false;
     }
   };
@@ -389,11 +399,12 @@ export default function App() {
       const cooldownEnd = web3Stats.lastDailyCheckIn + 24 * 3600;
       const canClaim = web3Stats.lastDailyCheckIn === 0 || now >= cooldownEnd;
 
+      const dailyReadyDot = document.getElementById('daily-ready-dot');
       // Update indicators
       if (canClaim && isConnected) {
-        window.DOM.dailyReadyDot.classList.remove('hidden');
+        if (dailyReadyDot) dailyReadyDot.classList.remove('hidden');
       } else {
-        window.DOM.dailyReadyDot.classList.add('hidden');
+        if (dailyReadyDot) dailyReadyDot.classList.add('hidden');
       }
 
       document.getElementById('streak-count').innerText = `${web3Stats.bonusPoints / 10} Claims`;
@@ -445,7 +456,8 @@ export default function App() {
 
     // 5. Leaderboard fetch override
     window.renderLeaderboardUI = async function () {
-      const tbody = window.DOM.leaderboardBody;
+      const tbody = document.getElementById('leaderboard-body');
+      if (!tbody) return;
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ffcc00;">LOADING ONCHAIN RECORDS...</td></tr>';
 
       if (CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
@@ -527,7 +539,7 @@ export default function App() {
     console.log(`[Receipt Detection] Starting receipt polling for ${label} (hash: ${txHash})...`);
     console.log(`[Receipt Detection] Using contract address: ${CONTRACT_ADDRESS}, USDC address: ${USDC_TOKEN_ADDRESS}`);
     console.log(`[Receipt Detection] PublicClient active chain ID: ${publicClient?.chain?.id}, expected chain ID: ${REQUIRED_CHAIN_ID}, RPC URL: https://rpc.testnet.arc.network`);
-    
+
     setOverlayStatus("Waiting for Arc confirmation...");
 
     const startTime = Date.now();
@@ -538,10 +550,10 @@ export default function App() {
       attempt++;
       try {
         console.log(`[Receipt Detection] Polling attempt #${attempt} for hash ${txHash}...`);
-        
+
         // Single direct RPC call to eth_getTransactionReceipt
         const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-        
+
         if (receipt) {
           console.log(`[Receipt Detection] SUCCESS: Found receipt on attempt #${attempt} for ${label}!`, receipt);
           console.log(`[Receipt Detection] Receipt Status: ${receipt.status}, Block Number: ${receipt.blockNumber.toString()}`);
@@ -549,21 +561,21 @@ export default function App() {
         }
       } catch (pollErr) {
         const errStr = (pollErr.name || pollErr.message || "").toLowerCase();
-        const isNotFoundError = errStr.includes("transactionreceiptnotfounderror") || 
-                            errStr.includes("not found") || 
-                            pollErr.code === -32603; // generic error code for some JSON-RPC errors
-        
+        const isNotFoundError = errStr.includes("transactionreceiptnotfounderror") ||
+          errStr.includes("not found") ||
+          pollErr.code === -32603; // generic error code for some JSON-RPC errors
+
         if (isNotFoundError) {
           console.log(`[Receipt Detection] Attempt #${attempt}: Transaction receipt not found yet (still pending/indexing).`);
         } else {
           console.warn(`[Receipt Detection] Attempt #${attempt} failed with unexpected error:`, pollErr);
         }
       }
-      
+
       // Wait for 3.0 seconds before polling again
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
-    
+
     throw new Error(`Transaction confirmation timed out after 180 seconds. Hash: ${txHash}. Please check ArcScan (https://testnet.arcscan.app) to verify if it succeeded.`);
   };
 
@@ -572,7 +584,7 @@ export default function App() {
     // 1. Log wallet connection details
     console.log("=== transaction request ===");
     console.log("connected wallet address:", address);
-    
+
     const currentChainId = await getActiveChainId();
     console.log("detected chainId:", currentChainId);
     console.log("required chainId:", REQUIRED_CHAIN_ID);
@@ -623,20 +635,20 @@ export default function App() {
       if (allowance < paymentValueUSDC) {
         setOverlayStatus("Requesting USDC spend approval in wallet...");
         console.log("Requesting approval for exactly 0.1 USDC (100,000 units)...");
-        
+
         const approveHash = await writeContractAsync({
           address: USDC_TOKEN_ADDRESS,
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [CONTRACT_ADDRESS, paymentValueUSDC],
         });
-        
+
         console.log("Approval transaction hash returned:", approveHash);
         setOverlayStatus("Confirming spend approval on blockchain...");
-        
+
         const approveReceipt = await waitForReceiptWithTimeout(approveHash, "USDC Spend Approval");
         console.log("Approval transaction receipt status:", approveReceipt.status);
-        
+
         if (approveReceipt.status !== 'success') {
           throw new Error("USDC Spend Approval transaction was reverted on blockchain.");
         }
@@ -825,6 +837,7 @@ const bannerStyle = {
   fontWeight: 'bold',
   borderBottom: '2px solid #000000',
   boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+  pointerEvents: 'auto',
 };
 
 const bannerContentStyle = {
@@ -856,7 +869,8 @@ const headerStyle = {
   position: 'absolute',
   top: '20px',
   right: '20px',
-  zIndex: 9999,
+  zIndex: 999999,
+  pointerEvents: 'auto',
 };
 
 const overlayStyle = {
@@ -870,6 +884,7 @@ const overlayStyle = {
   justifyContent: 'center',
   alignItems: 'center',
   zIndex: 99999,
+  pointerEvents: 'auto',
 };
 
 const modalStyle = {
