@@ -1677,7 +1677,7 @@ function updateGameLogic(dt) {
                     sounds.playShoot();
 
                     // Spawn visual enemy projectile
-                    const bulletSpeed = 6.0;
+                    const bulletSpeed = 10.0;
                     const angleToPlayer = Math.atan2(player.y - s.y, player.x - s.x);
                     sprites.push({
                         type: 'enemy_bullet',
@@ -1685,7 +1685,7 @@ function updateGameLogic(dt) {
                         y: s.y + Math.sin(angleToPlayer) * 0.4,
                         vx: Math.cos(angleToPlayer) * bulletSpeed,
                         vy: Math.sin(angleToPlayer) * bulletSpeed,
-                        life: 2.0,
+                        life: 5.0,
                         damage: 5
                     });
                 }
