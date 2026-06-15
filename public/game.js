@@ -1655,20 +1655,32 @@ function updateGameLogic(dt) {
 
             if (canSee) {
                 const chaseAngle = Math.atan2(dy, dx);
+                const stopDistance = 4.0;
+                const attackRange = 10.0;
 
-                if (s.state !== 'shoot') {
-                    s.state = 'chase';
-                    const step = 2.2 * dt; // Creepy balanced chase speed
-                    const nextX = s.x + Math.cos(chaseAngle) * step;
-                    const nextY = s.y + Math.sin(chaseAngle) * step;
+                if (dist > stopDistance) {
+                    if (s.state !== 'shoot') {
+                        s.state = 'chase';
+                        const step = 2.2 * dt; // Creepy balanced chase speed
+                        const nextX = s.x + Math.cos(chaseAngle) * step;
+                        const nextY = s.y + Math.sin(chaseAngle) * step;
 
-                    if (!checkWallCollision(nextX, s.y)) s.x = nextX;
-                    if (!checkWallCollision(s.x, nextY)) s.y = nextY;
+                        if (!checkWallCollision(nextX, s.y)) s.x = nextX;
+                        if (!checkWallCollision(s.x, nextY)) s.y = nextY;
+                    }
+                } else if (dist < stopDistance) {
+                    // Push the enemy back to stopDistance
+                    const pushDistance = stopDistance - dist;
+                    const pushX = s.x - (dx / dist) * pushDistance;
+                    const pushY = s.y - (dy / dist) * pushDistance;
+
+                    if (!checkWallCollision(pushX, s.y)) s.x = pushX;
+                    if (!checkWallCollision(s.x, pushY)) s.y = pushY;
                 }
 
-                // Ranged gun shooting attack (up to 8.0 units away, requiring strict line-of-sight)
+                // Ranged gun shooting attack (up to attackRange units away, requiring strict line-of-sight)
                 if (
-                    dist < 8.0 &&
+                    dist < attackRange &&
                     s.shootCooldown <= 0 &&
                     hasLineOfSight(s.x, s.y, player.x, player.y)
                 ) {
