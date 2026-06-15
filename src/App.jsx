@@ -364,6 +364,13 @@ export default function App() {
         return;
       }
 
+      // Save kills locally mapped to score and player address
+      if (address) {
+        localStorage.setItem(`onchain_kills_${address.toLowerCase()}_${score}`, (kills ?? 0).toString());
+      }
+      localStorage.setItem('backrooms_last_score', (score ?? 0).toString());
+      localStorage.setItem('backrooms_last_kills', (kills ?? 0).toString());
+
       setScoreToSubmit(score);
       setPaymentType('score');
       setShowOverlay(true);
@@ -522,7 +529,18 @@ export default function App() {
             const bonusVal = parseInt(hex.substring(baseOffset + 128, baseOffset + 192), 16) || 0;
 
             if (playerHex !== "0x0000000000000000000000000000000000000000") {
-              list.push({ player: playerHex, score: scoreVal, bonusPoints: bonusVal, kills: 0 });
+              let killsVal = 0;
+              const savedKills = localStorage.getItem(`onchain_kills_${playerHex.toLowerCase()}_${scoreVal}`);
+              if (savedKills !== null) {
+                killsVal = parseInt(savedKills, 10) || 0;
+              } else {
+                const lastScore = parseInt(localStorage.getItem('backrooms_last_score') || '0', 10);
+                const lastKills = parseInt(localStorage.getItem('backrooms_last_kills') || '0', 10);
+                if (scoreVal === lastScore && address && playerHex.toLowerCase() === address.toLowerCase()) {
+                  killsVal = lastKills;
+                }
+              }
+              list.push({ player: playerHex, score: scoreVal, bonusPoints: bonusVal, kills: killsVal });
             }
           }
 

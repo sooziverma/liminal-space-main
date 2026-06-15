@@ -749,7 +749,11 @@ function bindUIEvents() {
     });
 
     document.getElementById('btn-leaderboard').addEventListener('click', () => {
-        renderLeaderboardUI();
+        if (window.renderLeaderboardUI) {
+            window.renderLeaderboardUI();
+        } else {
+            renderLeaderboardUI();
+        }
         DOM.leaderboardModal.classList.remove('hidden');
     });
     document.getElementById('btn-close-leaderboard').addEventListener('click', () => {
