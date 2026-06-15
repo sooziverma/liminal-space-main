@@ -122,9 +122,13 @@ class SoundManager {
     }
 
     init() {
-        if (this.ctx) return;
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        this.ctx = new AudioContextClass();
+        if (!this.ctx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContextClass();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
     }
 
     playShoot() {
@@ -188,6 +192,28 @@ class SoundManager {
         osc.frequency.linearRampToValueAtTime(45, now + duration);
 
         gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + duration);
+    }
+
+    playClick() {
+        if (!this.isSfxEnabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const duration = 0.05;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + duration);
+
+        gain.gain.setValueAtTime(0.15, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
         osc.connect(gain);
@@ -2045,4 +2071,11 @@ window.updateHUD = updateHUD;
 window.sounds = sounds;
 window.DOM = DOM;
 window.isMobile = isMobile;
+
+// Global button click sound listener
+document.addEventListener('click', (e) => {
+    if (e.target && (e.target.tagName === 'BUTTON' || e.target.classList.contains('btn') || e.target.closest('button') || e.target.closest('.day-box'))) {
+        sounds.playClick();
+    }
+});
 
