@@ -233,8 +233,8 @@ export default function App() {
           params: [
             {
               to: CONTRACT_ADDRESS,
-              // getStats(address) selector: 0xc4c7b8c7 + 32-byte padded address
-              data: "0xc4c7b8c7" + address.substring(2).toLowerCase().padStart(64, '0')
+              // getStats(address) selector: 0xc23f85d6 + 32-byte padded address
+              data: "0xc23f85d6" + address.substring(2).toLowerCase().padStart(64, '0')
             },
             "latest"
           ]
@@ -409,19 +409,29 @@ export default function App() {
         if (dailyReadyDot) dailyReadyDot.classList.add('hidden');
       }
 
-      document.getElementById('streak-count').innerText = `${web3Stats.bonusPoints / 10} Claims`;
+      const totalClaims = Math.floor(web3Stats.bonusPoints / 10);
+      document.getElementById('streak-count').innerText = `${totalClaims} Claims`;
 
       // Update grid highlight
       const boxes = document.querySelectorAll('.day-box');
-      const claimCount = (web3Stats.bonusPoints / 10) % 7;
       boxes.forEach((box, index) => {
         box.classList.remove('claimed', 'current', 'locked');
-        if (index < claimCount) {
-          box.classList.add('claimed');
-        } else if (index === claimCount && canClaim) {
-          box.classList.add('current');
+        if (canClaim) {
+          const targetIndex = totalClaims % 7;
+          if (index < targetIndex) {
+            box.classList.add('claimed');
+          } else if (index === targetIndex) {
+            box.classList.add('current');
+          } else {
+            box.classList.add('locked');
+          }
         } else {
-          box.classList.add('locked');
+          const lastClaimedIndex = totalClaims > 0 ? (totalClaims - 1) % 7 : -1;
+          if (lastClaimedIndex !== -1 && index <= lastClaimedIndex) {
+            box.classList.add('claimed');
+          } else {
+            box.classList.add('locked');
+          }
         }
       });
 
@@ -448,10 +458,15 @@ export default function App() {
         const diff = (cooldownEnd - now) * 1000;
         const countdownVal = document.getElementById('countdown-val');
         if (countdownVal) {
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-          countdownVal.innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          if (diff <= 0) {
+            countdownVal.innerText = "00:00:00";
+            fetchStats();
+          } else {
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            countdownVal.innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          }
         }
       }
     };
@@ -478,8 +493,8 @@ export default function App() {
             params: [
               {
                 to: CONTRACT_ADDRESS,
-                // getLeaderboard() selector: 0xda598284
-                data: "0xda598284"
+                // getLeaderboard() selector: 0x6d763a6e
+                data: "0x6d763a6e"
               },
               "latest"
             ]
@@ -534,6 +549,9 @@ export default function App() {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff3333;">ERROR LOADING ONCHAIN RECORDS</td></tr>';
       }
     };
+
+    // Trigger initial UI update
+    window.updateDailyCheckInUI();
   }, [isConnected, address, web3Stats, chainId, connector, switchChainAsync]);
 
   // Helper to wait for transaction receipt with a 180-second timeout

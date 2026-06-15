@@ -786,7 +786,9 @@ function bindUIEvents() {
     });
 
     // Claim check-in reward
-    document.getElementById('btn-claim-daily').addEventListener('click', claimDailyReward);
+    document.getElementById('btn-claim-daily').addEventListener('click', () => {
+        claimDailyReward();
+    });
 
     // Pause control
     document.getElementById('btn-pause-game').addEventListener('click', pauseGame);
@@ -906,11 +908,7 @@ function updateCountdownTimer(lastClaim) {
 
 function updateDailyTimers() {
     if (!DOM.dailyModal.classList.contains('hidden')) {
-        const lastClaim = parseInt(localStorage.getItem('backrooms_last_claim') || '0');
-        const now = Date.now();
-        if (now - lastClaim < 24 * 60 * 60 * 1000) {
-            updateCountdownTimer(lastClaim);
-        }
+        updateDailyCheckInUI();
     }
 }
 
