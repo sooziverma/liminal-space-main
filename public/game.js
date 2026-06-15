@@ -1561,6 +1561,7 @@ function updateGameLogic(dt) {
     }
 
     // Update Sprites (AI and Effects)
+    const newSprites = [];
     sprites = sprites.filter(s => {
         if (s.type === 'spark') {
             s.timer -= dt;
@@ -1588,7 +1589,7 @@ function updateGameLogic(dt) {
                         sounds.playHit();
 
                         // Spawn impact spark
-                        sprites.push({
+                        newSprites.push({
                             x: e.x + (Math.random() - 0.5) * 0.2,
                             y: e.y + (Math.random() - 0.5) * 0.2,
                             type: 'spark',
@@ -1679,7 +1680,7 @@ function updateGameLogic(dt) {
                     // Spawn visual enemy projectile
                     const bulletSpeed = 10.0;
                     const angleToPlayer = Math.atan2(player.y - s.y, player.x - s.x);
-                    sprites.push({
+                    newSprites.push({
                         type: 'enemy_bullet',
                         x: s.x + Math.cos(angleToPlayer) * 0.4,
                         y: s.y + Math.sin(angleToPlayer) * 0.4,
@@ -1719,6 +1720,9 @@ function updateGameLogic(dt) {
         }
         return true;
     });
+    if (newSprites.length > 0) {
+        sprites.push(...newSprites);
+    }
 }
 
 // ================= 3D RAYCASTER RENDER ENGINE =================
