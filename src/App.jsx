@@ -330,11 +330,11 @@ export default function App() {
   // Hooking up global functions in game.js
   useEffect(() => {
     // 1. Play Session interceptor
-    if (window.startGame && window.startGame !== originalStartGame) {
+    if (window.startGame && !window.startGame.isInterceptor) {
       originalStartGame = window.startGame;
     }
 
-    window.startGame = async function () {
+    const playInterceptor = async function () {
       if (!isConnected) {
         alert("Wallet connection is required to start a game session.");
         return;
@@ -349,6 +349,8 @@ export default function App() {
       setShowOverlay(true);
       setOverlayStatus('Requesting 0.1 USDC payment for play session...');
     };
+    playInterceptor.isInterceptor = true;
+    window.startGame = playInterceptor;
 
     // 2. Score submission interceptor
     window.submitScoreToLeaderboard = async function (score, kills) {
@@ -532,7 +534,7 @@ export default function App() {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff3333;">ERROR LOADING ONCHAIN RECORDS</td></tr>';
       }
     };
-  }, [isConnected, address, web3Stats]);
+  }, [isConnected, address, web3Stats, chainId, connector, switchChainAsync]);
 
   // Helper to wait for transaction receipt with a 180-second timeout
   const waitForReceiptWithTimeout = async (txHash, label) => {
