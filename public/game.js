@@ -1672,7 +1672,7 @@ function updateGameLogic(dt) {
                     s.shootCooldown <= 0 &&
                     hasLineOfSight(s.x, s.y, player.x, player.y)
                 ) {
-                    s.shootCooldown = 1.0;
+                    s.shootCooldown = 4.0;
                     s.state = 'shoot';
                     s.animTimer = 0.3;
                     sounds.playShoot();
