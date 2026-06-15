@@ -505,17 +505,24 @@ export default function App() {
         tbody.innerHTML = '';
         if (resData.result && resData.result !== '0x') {
           const hex = resData.result.substring(2);
-          const len = parseInt(hex.substring(64, 128), 16);
+          const len = parseInt(hex.substring(64, 128), 16) || 0;
 
           const list = [];
           for (let i = 0; i < len; i++) {
-            const baseOffset = 128 + len * 64 + i * 96;
-            const playerHex = "0x" + hex.substring(baseOffset + 24, baseOffset + 64);
-            const scoreVal = parseInt(hex.substring(baseOffset + 64, baseOffset + 128), 16);
-            const bonusVal = parseInt(hex.substring(baseOffset + 128, baseOffset + 192), 16);
+            const baseOffset = 128 + i * 192;
+
+            if (baseOffset + 192 > hex.length) {
+              console.warn(`Leaderboard element at index ${i} is out of bounds in response hex`);
+              break;
+            }
+
+            const rawPlayer = hex.substring(baseOffset + 24, baseOffset + 64);
+            const playerHex = rawPlayer ? ("0x" + rawPlayer).toLowerCase() : "0x0000000000000000000000000000000000000000";
+            const scoreVal = parseInt(hex.substring(baseOffset + 64, baseOffset + 128), 16) || 0;
+            const bonusVal = parseInt(hex.substring(baseOffset + 128, baseOffset + 192), 16) || 0;
 
             if (playerHex !== "0x0000000000000000000000000000000000000000") {
-              list.push({ player: playerHex, score: scoreVal, bonusPoints: bonusVal });
+              list.push({ player: playerHex, score: scoreVal, bonusPoints: bonusVal, kills: 0 });
             }
           }
 
@@ -532,11 +539,15 @@ export default function App() {
               row.classList.add('highlight');
             }
 
+            const displayAddr = shortenAddress(entry.player) || "N/A";
+            const displayScore = entry.score ?? 0;
+            const displayKills = entry.kills ?? 0;
+
             row.innerHTML = `
                 <td class="rank-cell">#${i + 1}</td>
-                <td style="font-family: monospace;">${shortenAddress(entry.player)}</td>
-                <td style="color: var(--bg-yellow); font-weight: bold;">${entry.score}</td>
-                <td style="color: var(--neon-green);">${entry.bonusPoints} BP</td>
+                <td style="font-family: monospace;">${displayAddr}</td>
+                <td style="color: var(--bg-yellow); font-weight: bold;">${displayScore}</td>
+                <td style="color: var(--neon-green);">${displayKills}</td>
                 <td style="font-size: 0.8rem; opacity: 0.6;">ON-CHAIN</td>
             `;
             tbody.appendChild(row);
