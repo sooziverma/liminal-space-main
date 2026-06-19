@@ -107,6 +107,98 @@ function generateLiminalNeighborhoodMap() {
 
 const REWARDS = [100, 150, 200, 250, 300, 350, 500];
 
+const WEAPONS_DATA = [
+    {
+        id: 'starter_rifle',
+        name: 'Starter Rifle',
+        price: 0,
+        description: 'Standard issue security rifle. Reliable but basic.',
+        cooldown: 0.3,
+        damage: 10,
+        type: 'normal',
+        bulletColor: '#ffcc00',
+        sparkColor: '#ffcc00',
+        bulletSpeed: 12
+    },
+    {
+        id: 'smg',
+        name: 'SMG',
+        price: 1000,
+        description: 'High rate of fire, ideal for close encounters.',
+        cooldown: 0.1,
+        damage: 7,
+        type: 'normal',
+        bulletColor: '#ffd700',
+        sparkColor: '#ffaa33',
+        bulletSpeed: 15
+    },
+    {
+        id: 'assault_rifle',
+        name: 'Assault Rifle',
+        price: 5000,
+        description: 'Military grade rifle with high stopping power.',
+        cooldown: 0.2,
+        damage: 16,
+        type: 'normal',
+        bulletColor: '#ffffff',
+        sparkColor: '#ffcc00',
+        bulletSpeed: 16
+    },
+    {
+        id: 'combat_shotgun',
+        name: 'Combat Shotgun',
+        price: 10000,
+        description: 'Heavy close-range damage. Fires a spread of pellets.',
+        cooldown: 0.75,
+        damage: 6,
+        type: 'shotgun',
+        pelletCount: 5,
+        spread: 0.12,
+        bulletColor: '#ff6600',
+        sparkColor: '#ff3300',
+        bulletSpeed: 10
+    },
+    {
+        id: 'hmg',
+        name: 'Heavy Machine Gun',
+        price: 20000,
+        description: 'Sustained firepower with heavy caliber rounds.',
+        cooldown: 0.12,
+        damage: 18,
+        type: 'normal',
+        bulletColor: '#ff9900',
+        sparkColor: '#ffaa33',
+        bulletSpeed: 14
+    },
+    {
+        id: 'plasma_rifle',
+        name: 'Plasma Rifle',
+        price: 35000,
+        description: 'Experimental energy weapon. Fires superheated plasma.',
+        cooldown: 0.18,
+        damage: 25,
+        type: 'plasma',
+        bulletColor: '#00ffff',
+        sparkColor: '#ffffff',
+        bulletSpeed: 18
+    },
+    {
+        id: 'golden_cannon',
+        name: 'Golden Liminal Cannon',
+        price: 50000,
+        description: 'The ultimate weapon forged from pure codespace gold.',
+        cooldown: 0.4,
+        damage: 60,
+        type: 'golden',
+        bulletColor: '#ffe57f',
+        sparkColor: '#ffd740',
+        bulletSpeed: 20
+    }
+];
+
+const weaponCanvases = {};
+
+
 // Raycaster Resolution: scaled down to 320x240 for maximum performance + retro look
 const RENDER_WIDTH = 320;
 const RENDER_HEIGHT = 240;
@@ -131,52 +223,187 @@ class SoundManager {
         }
     }
 
-    playShoot() {
+    playShoot(weaponId) {
         if (!this.isSfxEnabled) return;
         this.init();
         const now = this.ctx.currentTime;
-        const duration = 0.2;
+        
+        const equippedId = weaponId || localStorage.getItem('backrooms_equipped_weapon') || 'starter_rifle';
+        
+        if (equippedId === 'plasma_rifle') {
+            // Futuristic laser sound
+            const duration = 0.25;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(150, now + duration);
+            
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+        } else if (equippedId === 'golden_cannon') {
+            // Giant explosion / boom sound
+            const duration = 0.55;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(180, now);
+            osc.frequency.linearRampToValueAtTime(30, now + duration);
+            
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            // Noise buffer for explosion rumble
+            const bufferSize = this.ctx.sampleRate * duration;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(200, now);
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.4, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.ctx.destination);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            osc.start(now);
+            noise.start(now);
+            osc.stop(now + duration);
+            noise.stop(now + duration);
+        } else if (equippedId === 'combat_shotgun') {
+            // Louder gunshot with noise blast
+            const duration = 0.35;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(250, now);
+            osc.frequency.exponentialRampToValueAtTime(40, now + duration);
+            
+            gain.gain.setValueAtTime(0.45, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            const bufferSize = this.ctx.sampleRate * duration;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(500, now);
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.35, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.ctx.destination);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            osc.start(now);
+            noise.start(now);
+            osc.stop(now + duration);
+            noise.stop(now + duration);
+        } else if (equippedId === 'smg') {
+            // Rapid high-pitch pop sound
+            const duration = 0.12;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(450, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + duration);
+            
+            gain.gain.setValueAtTime(0.25, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            const bufferSize = this.ctx.sampleRate * duration;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(1000, now);
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.15, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.ctx.destination);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            osc.start(now);
+            noise.start(now);
+            osc.stop(now + duration);
+            noise.stop(now + duration);
+        } else {
+            // Default Starter Rifle / Assault Rifle / HMG
+            const duration = 0.22;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(320, now);
+            osc.frequency.exponentialRampToValueAtTime(70, now + duration);
 
-        // Gunshot pitch drop
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(320, now);
-        osc.frequency.exponentialRampToValueAtTime(70, now + duration);
+            gain.gain.setValueAtTime(0.35, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            const bufferSize = this.ctx.sampleRate * duration;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
 
-        // Noise buffer for blast texture
-        const bufferSize = this.ctx.sampleRate * duration;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const noiseFilter = this.ctx.createBiquadFilter();
+            noiseFilter.type = 'bandpass';
+            noiseFilter.frequency.setValueAtTime(900, now);
+
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.25, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(this.ctx.destination);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc.start(now);
+            noise.start(now);
+            osc.stop(now + duration);
+            noise.stop(now + duration);
         }
-
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = buffer;
-
-        const noiseFilter = this.ctx.createBiquadFilter();
-        noiseFilter.type = 'bandpass';
-        noiseFilter.frequency.setValueAtTime(900, now);
-
-        const noiseGain = this.ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.25, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-        noise.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(this.ctx.destination);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-
-        osc.start(now);
-        noise.start(now);
-        osc.stop(now + duration);
-        noise.stop(now + duration);
     }
 
     playHit() {
@@ -346,6 +573,215 @@ const enemyShootCanvas = document.createElement('canvas');
 const enemyDeadCanvas = document.createElement('canvas');
 const gunIdleCanvas = document.createElement('canvas');
 const gunShootCanvas = document.createElement('canvas');
+
+function generateWeaponCanvas(weaponId, canvas, isFiring) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
+
+    const recoil = isFiring ? 10 : 0;
+
+    // Sleeve
+    ctx.fillStyle = '#1c1b18'; // Dark sleeve
+    ctx.fillRect(46, 70 - recoil, 36, 50 + recoil);
+
+    // Hand
+    ctx.fillStyle = '#d19d71'; // Pale skin
+    ctx.fillRect(48, 54 - recoil, 28, 20);
+    ctx.fillStyle = '#af7f56'; // Shadow
+    ctx.fillRect(48, 64 - recoil, 28, 10);
+
+    // Gun drawing based on weaponId
+    if (weaponId === 'starter_rifle') {
+        // Standard Pistol / Rifle look
+        ctx.fillStyle = '#4a4e51'; // Steel body
+        ctx.fillRect(56, 22 - recoil, 14, 38);
+        ctx.fillStyle = '#222222'; // Dark trim
+        ctx.fillRect(56, 22 - recoil, 4, 38);
+        ctx.fillStyle = '#111'; // Muzzle
+        ctx.fillRect(60, 18 - recoil, 6, 4);
+        ctx.fillStyle = '#3a281e'; // Wood grip details
+        ctx.fillRect(52, 46 - recoil, 10, 20);
+    } else if (weaponId === 'smg') {
+        // Submachine Gun - compact black frame, yellow striped mag
+        ctx.fillStyle = '#252627'; // Matte black body
+        ctx.fillRect(52, 16 - recoil, 18, 44);
+        ctx.fillStyle = '#111111'; // Barrel
+        ctx.fillRect(58, 8 - recoil, 6, 8);
+        ctx.fillStyle = '#e5a93b'; // Curved magazine
+        ctx.fillRect(46, 42 - recoil, 8, 24);
+        ctx.fillStyle = '#222'; // Magazine details
+        ctx.fillRect(46, 50 - recoil, 8, 3);
+        ctx.fillStyle = '#151515'; // Grip
+        ctx.fillRect(52, 36 - recoil, 10, 20);
+    } else if (weaponId === 'assault_rifle') {
+        // Assault Rifle - longer body, wood stock/handguard
+        ctx.fillStyle = '#383a3c'; // Receiver
+        ctx.fillRect(54, 18 - recoil, 16, 42);
+        ctx.fillStyle = '#7c5335'; // Wood handguard
+        ctx.fillRect(56, 12 - recoil, 12, 18);
+        ctx.fillStyle = '#111111'; // Barrel & sights
+        ctx.fillRect(59, 2 - recoil, 6, 10);
+        ctx.fillStyle = '#222'; // Magazine
+        ctx.fillRect(48, 40 - recoil, 8, 22);
+    } else if (weaponId === 'combat_shotgun') {
+        // Combat Shotgun - double thick barrel, pump grip
+        ctx.fillStyle = '#4a4e69'; // Receiver
+        ctx.fillRect(52, 22 - recoil, 20, 38);
+        ctx.fillStyle = '#8d5b4c'; // Pump grip
+        ctx.fillRect(54, 28 - recoil, 16, 15);
+        ctx.fillStyle = '#222'; // Double barrels
+        ctx.fillRect(54, 4 - recoil, 6, 18);
+        ctx.fillRect(62, 4 - recoil, 6, 18);
+    } else if (weaponId === 'hmg') {
+        // Heavy Machine Gun - massive grey boxy barrel
+        ctx.fillStyle = '#5c677d'; // Bulk receiver
+        ctx.fillRect(46, 20 - recoil, 28, 40);
+        ctx.fillStyle = '#222222'; // Heavy barrel
+        ctx.fillRect(55, 2 - recoil, 10, 18);
+        ctx.fillStyle = '#ffd700'; // Ammo belt
+        ctx.fillRect(36, 44 - recoil, 12, 16);
+    } else if (weaponId === 'plasma_rifle') {
+        // Plasma Rifle - futuristic white with cyan glow
+        ctx.fillStyle = '#e2e2e2'; // Futuristic white
+        ctx.fillRect(50, 16 - recoil, 22, 44);
+        ctx.fillStyle = '#00f0ff'; // Cyan chamber
+        ctx.fillRect(56, 26 - recoil, 10, 16);
+        ctx.fillStyle = '#a2a2a2'; // Glowing barrel
+        ctx.fillRect(58, 4 - recoil, 6, 12);
+        ctx.fillStyle = '#00f0ff'; // Barrel tip glow
+        ctx.fillRect(58, 2 - recoil, 6, 2);
+    } else if (weaponId === 'golden_cannon') {
+        // Golden Liminal Cannon - glowing gold and white filigree
+        ctx.fillStyle = '#ffd700'; // Pure gold body
+        ctx.fillRect(44, 14 - recoil, 32, 46);
+        ctx.fillStyle = '#f7eed0'; // White gold highlight
+        ctx.fillRect(48, 14 - recoil, 6, 46);
+        ctx.fillRect(66, 14 - recoil, 6, 46);
+        ctx.fillStyle = '#ffffff'; // Core glow
+        ctx.fillRect(54, 24 - recoil, 12, 16);
+        ctx.fillStyle = '#b89f3b'; // Large muzzle
+        ctx.fillRect(50, 2 - recoil, 20, 12);
+    }
+}
+
+function drawWeaponIcon(canvas, weaponId) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    
+    // Draw a side-profile representation in pixel art style
+    if (weaponId === 'starter_rifle') {
+        // Wooden stock
+        ctx.fillStyle = '#5c4033';
+        ctx.fillRect(8, 32, 14, 10);
+        ctx.fillRect(22, 34, 12, 6);
+        // Steel frame
+        ctx.fillStyle = '#4a4e51';
+        ctx.fillRect(34, 30, 16, 10);
+        ctx.fillRect(50, 32, 10, 6);
+        // Long Barrel
+        ctx.fillStyle = '#222';
+        ctx.fillRect(60, 32, 28, 3);
+        // Grip/Trigger
+        ctx.fillStyle = '#333';
+        ctx.fillRect(32, 38, 4, 8);
+    } else if (weaponId === 'smg') {
+        // Compact frame
+        ctx.fillStyle = '#252627';
+        ctx.fillRect(20, 26, 32, 14);
+        // Barrel
+        ctx.fillStyle = '#111';
+        ctx.fillRect(52, 29, 12, 4);
+        // Magazine (curved, yellow striped)
+        ctx.fillStyle = '#e5a93b';
+        ctx.fillRect(36, 40, 6, 15);
+        ctx.fillStyle = '#222';
+        ctx.fillRect(36, 46, 6, 2);
+        // Grip
+        ctx.fillRect(24, 40, 5, 10);
+    } else if (weaponId === 'assault_rifle') {
+        // Stock
+        ctx.fillStyle = '#7c5335';
+        ctx.fillRect(6, 32, 16, 12);
+        // Receiver
+        ctx.fillStyle = '#383a3c';
+        ctx.fillRect(22, 28, 26, 14);
+        // Handguard (wood)
+        ctx.fillStyle = '#7c5335';
+        ctx.fillRect(48, 31, 16, 9);
+        // Barrel
+        ctx.fillStyle = '#111';
+        ctx.fillRect(64, 33, 20, 4);
+        // Magazine (curved)
+        ctx.fillStyle = '#222';
+        ctx.fillRect(34, 42, 6, 14);
+    } else if (weaponId === 'combat_shotgun') {
+        // Stock
+        ctx.fillStyle = '#8d5b4c';
+        ctx.fillRect(8, 32, 18, 12);
+        // Body
+        ctx.fillStyle = '#4a4e69';
+        ctx.fillRect(26, 28, 28, 14);
+        // Pump grip
+        ctx.fillStyle = '#8d5b4c';
+        ctx.fillRect(38, 42, 14, 6);
+        // Dual barrel
+        ctx.fillStyle = '#222';
+        ctx.fillRect(54, 30, 26, 8);
+    } else if (weaponId === 'hmg') {
+        // Massive frame
+        ctx.fillStyle = '#5c677d';
+        ctx.fillRect(16, 24, 38, 18);
+        // Huge barrel
+        ctx.fillStyle = '#111';
+        ctx.fillRect(54, 29, 28, 6);
+        // Bullet belt
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(32, 42, 10, 10);
+        ctx.fillStyle = '#b89f3b';
+        ctx.fillRect(32, 46, 10, 2);
+        // Grip and rear handle
+        ctx.fillStyle = '#222';
+        ctx.fillRect(20, 42, 6, 10);
+        ctx.fillRect(10, 24, 6, 14);
+    } else if (weaponId === 'plasma_rifle') {
+        // High tech white frame
+        ctx.fillStyle = '#e2e2e2';
+        ctx.fillRect(18, 26, 36, 14);
+        // Cyan glowing core
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(30, 29, 14, 6);
+        // Barrel
+        ctx.fillStyle = '#a2a2a2';
+        ctx.fillRect(54, 28, 20, 8);
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(74, 30, 4, 4);
+        // Grip
+        ctx.fillStyle = '#111';
+        ctx.fillRect(24, 40, 6, 12);
+    } else if (weaponId === 'golden_cannon') {
+        // Ornate gold body
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(14, 22, 40, 20);
+        // White gold trim
+        ctx.fillStyle = '#f7eed0';
+        ctx.fillRect(14, 22, 40, 3);
+        ctx.fillRect(14, 39, 40, 3);
+        ctx.fillRect(24, 25, 4, 14);
+        // Glowing white core
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(34, 27, 10, 10);
+        // Cannon barrel
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(54, 25, 24, 14);
+        ctx.fillStyle = '#b89f3b';
+        ctx.fillRect(78, 23, 4, 18);
+        // Grip
+        ctx.fillStyle = '#222';
+        ctx.fillRect(22, 42, 8, 12);
+    }
+}
 
 function initProceduralAssets() {
     // 1. Textures (64x64)
@@ -585,6 +1021,19 @@ function initProceduralAssets() {
     ctx.fillRect(60, 8, 6, 4);
     ctx.fillStyle = '#151515';
     ctx.fillRect(52, 36, 10, 20);
+
+    // Generate canvases for all weapons
+    WEAPONS_DATA.forEach(w => {
+        const idle = document.createElement('canvas');
+        const shoot = document.createElement('canvas');
+        idle.width = 120;
+        idle.height = 120;
+        shoot.width = 120;
+        shoot.height = 120;
+        generateWeaponCanvas(w.id, idle, false);
+        generateWeaponCanvas(w.id, shoot, true);
+        weaponCanvases[w.id] = { idle, shoot };
+    });
 }
 
 // ================= GAMEPLAY VARIABLES & STATES =================
@@ -665,13 +1114,14 @@ let isSpaceHeld = false;
 
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (e.code === 'Space') {
-        isSpaceHeld = true;
-    }
     console.log('KEY DOWN:', e.code);
 
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
+    }
+
+    if (e.code === 'Space') {
+        isSpaceHeld = true;
     }
 
     if (e.code === 'Escape') {
@@ -745,10 +1195,18 @@ function initSaveState() {
         localStorage.setItem('backrooms_leaderboard', JSON.stringify(initialScores));
     }
 
+    if (!localStorage.getItem('backrooms_owned_weapons')) {
+        localStorage.setItem('backrooms_owned_weapons', JSON.stringify(['starter_rifle']));
+    }
+    if (!localStorage.getItem('backrooms_equipped_weapon')) {
+        localStorage.setItem('backrooms_equipped_weapon', 'starter_rifle');
+    }
+
     // Update local config variables from store
     DOM.usernameLabel.innerText = localStorage.getItem('backrooms_username');
     DOM.coinsLabel.innerText = `🪙 ${localStorage.getItem('backrooms_coins')}`;
     sensitivity = parseInt(localStorage.getItem('backrooms_sensitivity'));
+    player.equippedWeapon = localStorage.getItem('backrooms_equipped_weapon') || 'starter_rifle';
 }
 
 // ================= UI BINDINGS & SCREENS HANDLING =================
@@ -772,6 +1230,14 @@ function bindUIEvents() {
     });
     document.getElementById('btn-close-daily').addEventListener('click', () => {
         DOM.dailyModal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-weapon-shop').addEventListener('click', () => {
+        renderWeaponShopUI();
+        document.getElementById('weapon-shop-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-shop').addEventListener('click', () => {
+        document.getElementById('weapon-shop-modal').classList.add('hidden');
     });
 
     document.getElementById('btn-leaderboard').addEventListener('click', () => {
@@ -971,6 +1437,121 @@ function claimDailyReward() {
     DOM.coinsLabel.innerText = `🪙 ${coins}`;
 
     sounds.playHit();
+}
+
+function renderWeaponShopUI() {
+    const coins = parseInt(localStorage.getItem('backrooms_coins') || '0');
+    document.getElementById('shop-coins-val').innerText = `🪙 ${coins}`;
+
+    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    const equipped = localStorage.getItem('backrooms_equipped_weapon') || 'starter_rifle';
+
+    const container = document.getElementById('weapon-list-container');
+    container.innerHTML = '';
+
+    WEAPONS_DATA.forEach(w => {
+        const item = document.createElement('div');
+        item.className = 'weapon-item';
+
+        const isOwned = owned.includes(w.id);
+        const isEquipped = w.id === equipped;
+        const canAfford = coins >= w.price;
+
+        // Button state
+        let btnHtml = '';
+        if (isEquipped) {
+            btnHtml = `<button class="weapon-action-btn equipped" disabled>EQUIPPED</button>`;
+        } else if (isOwned) {
+            btnHtml = `<button class="weapon-action-btn owned" data-id="${w.id}" data-action="equip">EQUIP</button>`;
+        } else {
+            // Locked
+            const disabledClass = canAfford ? '' : 'disabled';
+            const disabledAttr = canAfford ? '' : 'disabled';
+            btnHtml = `<button class="weapon-action-btn locked ${disabledClass}" data-id="${w.id}" data-action="buy" ${disabledAttr}>🪙 ${w.price.toLocaleString()}</button>`;
+        }
+
+        item.innerHTML = `
+            <div class="weapon-icon-container">
+                <canvas id="shop-icon-${w.id}" class="weapon-icon-canvas" width="90" height="50"></canvas>
+            </div>
+            <div class="weapon-details">
+                <div class="weapon-name-row">
+                    <span class="weapon-name">${w.name}</span>
+                </div>
+                <span class="weapon-desc">${w.description}</span>
+            </div>
+            <div class="weapon-actions">
+                ${btnHtml}
+            </div>
+        `;
+
+        container.appendChild(item);
+
+        // Draw the weapon icon profile on the canvas
+        const canvas = document.getElementById(`shop-icon-${w.id}`);
+        if (canvas) {
+            drawWeaponIcon(canvas, w.id);
+        }
+    });
+
+    // Attach event listeners to buttons
+    container.querySelectorAll('.weapon-action-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = btn.getAttribute('data-id');
+            const action = btn.getAttribute('data-action');
+            if (!id || !action) return;
+
+            if (action === 'equip') {
+                equipWeapon(id);
+            } else if (action === 'buy') {
+                buyWeapon(id);
+            }
+        });
+    });
+}
+
+function equipWeapon(id) {
+    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    if (!owned.includes(id)) return;
+
+    localStorage.setItem('backrooms_equipped_weapon', id);
+    player.equippedWeapon = id;
+    renderWeaponShopUI();
+    sounds.playHit();
+}
+
+function buyWeapon(id) {
+    const w = WEAPONS_DATA.find(item => item.id === id);
+    if (!w) return;
+
+    let coins = parseInt(localStorage.getItem('backrooms_coins') || '0');
+    if (coins < w.price) {
+        alert("Not enough coins!");
+        return;
+    }
+
+    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    if (owned.includes(id)) {
+        alert("Weapon already purchased!");
+        return;
+    }
+
+    // Deduct coins
+    coins -= w.price;
+    localStorage.setItem('backrooms_coins', coins.toString());
+
+    // Update owned list
+    owned.push(id);
+    localStorage.setItem('backrooms_owned_weapons', JSON.stringify(owned));
+
+    // Automatically equip purchased weapon
+    localStorage.setItem('backrooms_equipped_weapon', id);
+    player.equippedWeapon = id;
+
+    // Refresh UI
+    renderWeaponShopUI();
+    DOM.coinsLabel.innerText = `🪙 ${coins}`;
+    sounds.playHit(); // A satisfying sound
 }
 
 // ================= LEADERBOARD LOGIC =================
@@ -1263,6 +1844,7 @@ function startGame() {
     player.shootAnimTimer = 0.0;
     player.bobTimer = 0.0;
     player.isMoving = false;
+    player.equippedWeapon = localStorage.getItem('backrooms_equipped_weapon') || 'starter_rifle';
 
     // Reset spawner and entities
     sprites = [];
@@ -1381,7 +1963,7 @@ function spawnEnemyDistributed() {
             if (!checkWallCollision(sx, sy)) {
                 // Ensure medium distance from the player
                 const distToPlayer = Math.sqrt((player.x - sx) ** 2 + (player.y - sy) ** 2);
-
+                
                 // Define limits based on attempt count to prevent deadlocks
                 const minPlayerDist = (attempts < 70) ? 9.0 : 7.0;
                 const maxPlayerDist = (attempts < 70) ? 26.0 : 32.0;
@@ -1430,20 +2012,45 @@ function shootPlayerWeapon() {
     if (gameState !== 'playing') return;
     if (player.shootCooldown > 0) return;
 
-    sounds.playShoot();
-    player.shootCooldown = 0.08;
-    player.shootAnimTimer = 0.18;
+    const equippedId = player.equippedWeapon || 'starter_rifle';
+    const weapon = WEAPONS_DATA.find(w => w.id === equippedId) || WEAPONS_DATA[0];
 
-    const bulletSpeed = 12;
-    sprites.push({
-        type: 'bullet',
-        x: player.x + Math.cos(player.angle) * 0.6,
-        y: player.y + Math.sin(player.angle) * 0.6,
-        vx: Math.cos(player.angle) * bulletSpeed,
-        vy: Math.sin(player.angle) * bulletSpeed,
-        life: 1.5,
-        damage: 10
-    });
+    sounds.playShoot(weapon.id);
+
+    if (weapon.type === 'shotgun') {
+        player.shootCooldown = weapon.cooldown;
+        player.shootAnimTimer = 0.25;
+
+        for (let i = 0; i < weapon.pelletCount; i++) {
+            const spreadAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+            sprites.push({
+                type: 'bullet',
+                x: player.x + Math.cos(player.angle) * 0.6,
+                y: player.y + Math.sin(player.angle) * 0.6,
+                vx: Math.cos(spreadAngle) * weapon.bulletSpeed,
+                vy: Math.sin(spreadAngle) * weapon.bulletSpeed,
+                life: 1.0,
+                damage: weapon.damage,
+                color: weapon.bulletColor,
+                sparkColor: weapon.sparkColor
+            });
+        }
+    } else {
+        player.shootCooldown = weapon.cooldown;
+        player.shootAnimTimer = Math.min(0.2, weapon.cooldown * 0.8);
+
+        sprites.push({
+            type: 'bullet',
+            x: player.x + Math.cos(player.angle) * 0.6,
+            y: player.y + Math.sin(player.angle) * 0.6,
+            vx: Math.cos(player.angle) * weapon.bulletSpeed,
+            vy: Math.sin(player.angle) * weapon.bulletSpeed,
+            life: 1.5,
+            damage: weapon.damage,
+            color: weapon.bulletColor,
+            sparkColor: weapon.sparkColor
+        });
+    }
 }
 
 // Checks if line of sight is clear from A to B (DDA check)
@@ -1615,15 +2222,16 @@ function updateGameLogic(dt) {
                         e.hp -= s.damage || 10;
                         e.hitFlashTimer = 0.12;
                         sounds.playHit();
-
+                        
                         // Spawn impact spark
                         newSprites.push({
                             x: e.x + (Math.random() - 0.5) * 0.2,
                             y: e.y + (Math.random() - 0.5) * 0.2,
                             type: 'spark',
-                            timer: 0.15
+                            timer: 0.15,
+                            color: s.sparkColor
                         });
-
+                        
                         if (e.hp <= 0) {
                             e.state = 'dead';
                             sounds.playDeath();
@@ -1631,7 +2239,7 @@ function updateGameLogic(dt) {
                             player.kills += 1;
                             updateHUD();
                         }
-
+                        
                         hitEnemy = true;
                     }
                 }
@@ -1648,11 +2256,8 @@ function updateGameLogic(dt) {
             s.life -= dt;
 
             // 1. Check hit against player FIRST (robust radius of 1.0)
-            const dx = player.x - s.x;
-            const dy = player.y - s.y;
-            const hitRadius = 3.0;
-
-            if ((dx * dx + dy * dy) < hitRadius * hitRadius) {
+            const dist = Math.sqrt((player.x - s.x) ** 2 + (player.y - s.y) ** 2);
+            if (dist < 1.0) {
                 console.log("ENEMY BULLET HIT PLAYER");
                 damagePlayer(5);
                 return false;
@@ -1718,7 +2323,7 @@ function updateGameLogic(dt) {
                     sounds.playShoot();
 
                     // Spawn visual enemy projectile
-                    const bulletSpeed = 10.0;
+                    const bulletSpeed = 6.0;
                     const angleToPlayer = Math.atan2(player.y - s.y, player.x - s.x);
                     newSprites.push({
                         type: 'enemy_bullet',
@@ -1726,7 +2331,7 @@ function updateGameLogic(dt) {
                         y: s.y + Math.sin(angleToPlayer) * 0.4,
                         vx: Math.cos(angleToPlayer) * bulletSpeed,
                         vy: Math.sin(angleToPlayer) * bulletSpeed,
-                        life: 5.0,
+                        life: 2.0,
                         damage: 5
                     });
                 }
@@ -1965,7 +2570,7 @@ function renderGame3D() {
             spriteCanvas.width = 32;
             spriteCanvas.height = 32;
             const sc = spriteCanvas.getContext('2d');
-            sc.fillStyle = '#ffcc00';
+            sc.fillStyle = s.color || '#ffcc00';
             sc.beginPath(); sc.arc(16, 16, 6 + Math.random() * 4, 0, Math.PI * 2); sc.fill();
             sc.fillStyle = '#ffffff';
             sc.beginPath(); sc.arc(16, 16, 3, 0, Math.PI * 2); sc.fill();
@@ -1974,7 +2579,7 @@ function renderGame3D() {
             spriteCanvas.width = 16;
             spriteCanvas.height = 16;
             const sc = spriteCanvas.getContext('2d');
-            sc.fillStyle = (s.type === 'enemy_bullet') ? '#ff3300' : '#ffcc00';
+            sc.fillStyle = (s.type === 'enemy_bullet') ? '#ff3300' : (s.color || '#ffcc00');
             sc.beginPath(); sc.arc(8, 8, 4, 0, Math.PI * 2); sc.fill();
             sc.fillStyle = '#ffffff';
             sc.beginPath(); sc.arc(8, 8, 1.5, 0, Math.PI * 2); sc.fill();
@@ -2028,7 +2633,9 @@ function renderGame3D() {
     const gunX = Math.floor((RENDER_WIDTH - baseGunWidth) / 2 + bobX);
     const gunY = Math.floor(RENDER_HEIGHT - baseGunHeight + 12 + bobY);
 
-    const curGunCanvas = (player.shootAnimTimer > 0) ? gunShootCanvas : gunIdleCanvas;
+    const activeWeaponId = player.equippedWeapon || 'starter_rifle';
+    const activeCanvases = weaponCanvases[activeWeaponId] || { idle: gunIdleCanvas, shoot: gunShootCanvas };
+    const curGunCanvas = (player.shootAnimTimer > 0) ? activeCanvases.shoot : activeCanvases.idle;
 
     canvasContext.drawImage(
         curGunCanvas,
@@ -2040,7 +2647,12 @@ function renderGame3D() {
         const flashX = gunX + baseGunWidth * 0.52;
         const flashY = gunY + baseGunHeight * 0.12;
 
-        canvasContext.fillStyle = '#ffaa33';
+        const weapon = WEAPONS_DATA.find(w => w.id === activeWeaponId) || WEAPONS_DATA[0];
+        let primaryFlash = '#ffaa33';
+        if (weapon.id === 'plasma_rifle') primaryFlash = '#00f0ff';
+        else if (weapon.id === 'golden_cannon') primaryFlash = '#ffd700';
+
+        canvasContext.fillStyle = primaryFlash;
         canvasContext.beginPath();
         canvasContext.arc(flashX, flashY, 15 + Math.random() * 8, 0, Math.PI * 2);
         canvasContext.fill();
@@ -2071,6 +2683,7 @@ window.updateHUD = updateHUD;
 window.sounds = sounds;
 window.DOM = DOM;
 window.isMobile = isMobile;
+window.realStartGame = startGame;
 
 // Global button click sound listener
 document.addEventListener('click', (e) => {
@@ -2078,4 +2691,33 @@ document.addEventListener('click', (e) => {
         sounds.playClick();
     }
 });
+
+// Test hooks for headless browser testing
+(function() {
+    if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // 1. Hook to set coins
+        if (urlParams.has('set_coins')) {
+            const coinsVal = urlParams.get('set_coins');
+            localStorage.setItem('backrooms_coins', coinsVal);
+            // Clean URL to prevent infinite reload loop
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.location.href = cleanUrl;
+        }
+        
+        // 2. Hook to auto-start the game
+        if (urlParams.get('start_game') === 'true') {
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    if (typeof window.realStartGame === 'function') {
+                        window.realStartGame();
+                    } else if (typeof startGame === 'function') {
+                        startGame();
+                    }
+                }, 1500);
+            });
+        }
+    }
+})();
 
