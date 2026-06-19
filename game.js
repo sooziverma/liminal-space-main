@@ -1440,10 +1440,18 @@ function claimDailyReward() {
 }
 
 function renderWeaponShopUI() {
-    const coins = parseInt(localStorage.getItem('backrooms_coins') || '0');
+    let coins = parseInt(localStorage.getItem('backrooms_coins') || '0');
+    if (isNaN(coins)) coins = 0;
     document.getElementById('shop-coins-val').innerText = `🪙 ${coins}`;
 
-    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    let owned = ['starter_rifle'];
+    try {
+        owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    } catch (e) {
+        owned = ['starter_rifle'];
+    }
+    if (!Array.isArray(owned)) owned = ['starter_rifle'];
+
     const equipped = localStorage.getItem('backrooms_equipped_weapon') || 'starter_rifle';
 
     const container = document.getElementById('weapon-list-container');
@@ -1466,8 +1474,8 @@ function renderWeaponShopUI() {
         } else {
             // Locked
             const disabledClass = canAfford ? '' : 'disabled';
-            const disabledAttr = canAfford ? '' : 'disabled';
-            btnHtml = `<button class="weapon-action-btn locked ${disabledClass}" data-id="${w.id}" data-action="buy" ${disabledAttr}>🪙 ${w.price.toLocaleString()}</button>`;
+            // We do NOT disable the button so that the click can trigger the "Not enough coins!" check and alert
+            btnHtml = `<button class="weapon-action-btn locked ${disabledClass}" data-id="${w.id}" data-action="buy">🪙 ${w.price.toLocaleString()}</button>`;
         }
 
         item.innerHTML = `
@@ -1511,7 +1519,14 @@ function renderWeaponShopUI() {
 }
 
 function equipWeapon(id) {
-    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    let owned = ['starter_rifle'];
+    try {
+        owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    } catch (e) {
+        owned = ['starter_rifle'];
+    }
+    if (!Array.isArray(owned)) owned = ['starter_rifle'];
+
     if (!owned.includes(id)) return;
 
     localStorage.setItem('backrooms_equipped_weapon', id);
@@ -1525,12 +1540,20 @@ function buyWeapon(id) {
     if (!w) return;
 
     let coins = parseInt(localStorage.getItem('backrooms_coins') || '0');
+    if (isNaN(coins)) coins = 0;
     if (coins < w.price) {
         alert("Not enough coins!");
         return;
     }
 
-    const owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    let owned = ['starter_rifle'];
+    try {
+        owned = JSON.parse(localStorage.getItem('backrooms_owned_weapons') || '["starter_rifle"]');
+    } catch (e) {
+        owned = ['starter_rifle'];
+    }
+    if (!Array.isArray(owned)) owned = ['starter_rifle'];
+
     if (owned.includes(id)) {
         alert("Weapon already purchased!");
         return;
